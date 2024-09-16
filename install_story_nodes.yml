@@ -38,7 +38,7 @@
           - pv
         state: present
 
-        - name: Check Go version
+    - name: Check Go version
       shell: go version
       register: go_version_check
       ignore_errors: yes
@@ -84,7 +84,7 @@
             var: go_version_verify.stdout
             
       when: go_version_check.rc != 0 or GO_VERSION not in go_version_check.stdout
-      
+
     - name: Download and install story-geth
       shell: |
         wget https://story-geth-binaries.s3.us-west-1.amazonaws.com/geth-public/geth-linux-amd64-{{ geth_version }}.tar.gz
