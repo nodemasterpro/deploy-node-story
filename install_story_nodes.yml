@@ -38,23 +38,53 @@
           - pv
         state: present
 
-    - name: Check Go version
+        - name: Check Go version
       shell: go version
       register: go_version_check
       ignore_errors: yes
 
-    - name: Install Go if not present or version mismatch
+    - name: Install and configure Go
       block:
-        - name: Download and install Go
-          shell: |
-            wget https://golang.org/dl/go{{ GO_VERSION }}.linux-amd64.tar.gz
-            rm -rf /usr/local/go
-            tar -C /usr/local -xzf go{{ GO_VERSION }}.linux-amd64.tar.gz
-            rm go{{ GO_VERSION }}.linux-amd64.tar.gz
-            echo "export PATH=$PATH:/usr/local/go/bin" >> $HOME/.bashrc
-            source $HOME/.bashrc
+        - name: Download Go
+          get_url:
+            url: "https://golang.org/dl/go{{ GO_VERSION }}.linux-amd64.tar.gz"
+            dest: "/tmp/go{{ GO_VERSION }}.linux-amd64.tar.gz"
+          
+        - name: Remove existing Go installation
+          file:
+            path: /usr/local/go
+            state: absent
+          
+        - name: Extract Go archive
+          unarchive:
+            src: "/tmp/go{{ GO_VERSION }}.linux-amd64.tar.gz"
+            dest: /usr/local
+            remote_src: yes
+          
+        - name: Clean up Go archive
+          file:
+            path: "/tmp/go{{ GO_VERSION }}.linux-amd64.tar.gz"
+            state: absent
+          
+        - name: Add Go to PATH in .bashrc
+          lineinfile:
+            path: "{{ ansible_env.HOME }}/.bashrc"
+            line: 'export PATH=$PATH:/usr/local/go/bin'
+            
+        - name: Update Ansible environment PATH
+          set_fact:
+            ansible_env: "{{ ansible_env | combine({'PATH': ansible_env.PATH + ':/usr/local/go/bin'}) }}"
+          
+        - name: Verify Go installation
+          shell: go version
+          register: go_version_verify
+          
+        - name: Display Go version
+          debug:
+            var: go_version_verify.stdout
+            
       when: go_version_check.rc != 0 or GO_VERSION not in go_version_check.stdout
-
+      
     - name: Download and install story-geth
       shell: |
         wget https://story-geth-binaries.s3.us-west-1.amazonaws.com/geth-public/geth-linux-amd64-{{ geth_version }}.tar.gz
