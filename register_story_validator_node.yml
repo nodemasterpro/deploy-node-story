@@ -1,0 +1,31 @@
+---
+- name: Register Story Protocol Validator
+  hosts: localhost
+  become: true
+
+  vars_prompt:
+    - name: stake_amount
+      prompt: "Enter the stake amount (in wei, e.g., 500000000000000000 for 0.5 IP)"
+      private: false
+
+  tasks:
+    - name: Read private key
+      shell: cat /root/.story/story/config/private_key.txt | awk -F'=' '{print $2}'
+      register: private_key
+
+    - name: Register validator
+      shell: >
+        story validator create --stake {{ stake_amount }} --private-key {{ private_key.stdout }}
+      register: registration_result
+
+    - name: Display registration result
+      debug:
+        var: registration_result.stdout_lines
+
+    - name: Get validator public address
+      shell: cat ~/.story/story/config/priv_validator_key.json | grep address | awk -F'"' '{print $4}'
+      register: validator_address
+
+    - name: Display validator public address
+      debug:
+        msg: "Validator public address: {{ validator_address.stdout }}"

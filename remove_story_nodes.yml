@@ -1,0 +1,52 @@
+---
+- name: Remove Story Protocol Node
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Stop services
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: no
+      loop:
+        - story-consensus-node
+        - story-geth
+      ignore_errors: yes
+
+    - name: Remove service files
+      file:
+        path: "/etc/systemd/system/{{ item }}.service"
+        state: absent
+      loop:
+        - story-consensus
+        - story-geth
+
+    - name: Remove binaries
+      file:
+        path: "/usr/local/bin/{{ item }}"
+        state: absent
+      loop:
+        - story
+        - geth
+
+    - name: Remove data directories
+      file:
+        path: "/root/.story"
+        state: absent
+
+    - name: Clean up downloaded files
+      file:
+        path: "/root/{{ item }}"
+        state: absent
+      loop:
+        - "geth-linux-amd64-*.tar.gz"
+        - "story-linux-amd64-*.tar.gz"
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Confirmation message
+      debug:
+        msg: "Story Protocol node has been successfully uninstalled."

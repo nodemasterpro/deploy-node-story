@@ -1,0 +1,14 @@
+[Unit]
+Description=Story Geth Execution Client
+After=network.target
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/local/bin/geth --iliad --syncmode full
+Restart=always
+RestartSec=3
+LimitNOFILE=4096
+
+[Install]
+WantedBy=multi-user.target

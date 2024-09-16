@@ -1,0 +1,194 @@
+---
+- name: Install Story Protocol Validator Node
+  hosts: all
+  become: true
+
+  vars:
+    GO_VERSION: "1.23.0"
+    geth_version: "0.9.2-ea9f0d2"
+    story_version: "0.9.11-2a25df1"
+    home_dir: "/root"
+    APP_HOME: "/root/.story/story"
+    ADDRBOOK_URL: "https://server-5.itrocket.net/testnet/story/addrbook.json"
+    ADDRBOOK_FILE: "{{ APP_HOME }}/config/addrbook.json"
+    PEERS_URL: "https://story-testnet-rpc.itrocket.net/net_info"
+    SNAPSHOT_BASE_URL: "https://server-5.itrocket.net/testnet/story/"
+    
+ 
+  vars_prompt:
+    - name: moniker
+      prompt: "Enter the moniker for the node"
+      private: false  
+
+  tasks:
+    - name: Update system
+      apt:
+        update_cache: yes
+        upgrade: yes
+
+    - name: Install dependencies
+      apt:
+        name:
+          - curl
+          - wget
+          - jq
+          - build-essential
+          - tar
+          - lz4
+          - pv
+        state: present
+
+    - name: Check Go version
+      shell: go version
+      register: go_version_check
+      ignore_errors: yes
+
+    - name: Install Go if not present or version mismatch
+      block:
+        - name: Download and install Go
+          shell: |
+            wget https://golang.org/dl/go{{ GO_VERSION }}.linux-amd64.tar.gz
+            rm -rf /usr/local/go
+            tar -C /usr/local -xzf go{{ GO_VERSION }}.linux-amd64.tar.gz
+            rm go{{ GO_VERSION }}.linux-amd64.tar.gz
+            echo "export PATH=$PATH:/usr/local/go/bin" >> $HOME/.bashrc
+            source $HOME/.bashrc
+      when: go_version_check.rc != 0 or GO_VERSION not in go_version_check.stdout
+
+    - name: Download and install story-geth
+      shell: |
+        wget https://story-geth-binaries.s3.us-west-1.amazonaws.com/geth-public/geth-linux-amd64-{{ geth_version }}.tar.gz
+        tar -xvf geth-linux-amd64-{{ geth_version }}.tar.gz
+        sudo mv geth-linux-amd64-{{ geth_version }}/geth /usr/local/bin/
+        sudo chmod +x /usr/local/bin/geth
+
+    - name: Download and install story
+      shell: |
+        wget https://story-geth-binaries.s3.us-west-1.amazonaws.com/story-public/story-linux-amd64-{{ story_version }}.tar.gz
+        tar -xvf story-linux-amd64-{{ story_version }}.tar.gz
+        sudo mv story-linux-amd64-{{ story_version }}/story /usr/local/bin/
+        sudo chmod +x /usr/local/bin/story
+
+    - name: Create data directories
+      file:
+        path: "{{ home_dir }}/.story/{{ item }}"
+        state: directory
+      loop:
+        - geth
+        - story
+
+    - name: Initialize story node
+      shell: story init --network iliad --moniker "{{ moniker }}"
+
+    - name: Get latest snapshot filename
+      uri:
+        url: "{{ SNAPSHOT_BASE_URL }}"
+        return_content: yes
+      register: snapshot_page
+
+
+    - name: Extract latest snapshot filename
+      set_fact:
+        snapshot_filename: "{{ (snapshot_page.content | regex_search('story_\\d{4}-\\d{2}-\\d{2}_\\d+_snap.tar.lz4')) }}"
+
+    - name: Display snapshot filename
+      debug:
+        msg: "Downloading snapshot: {{ snapshot_filename }}"
+
+    - name: Download snapshot
+      get_url:
+        url: "{{ SNAPSHOT_BASE_URL }}/{{ snapshot_filename }}"
+        dest: "/root/{{ snapshot_filename }}"
+      register: download_result
+
+    - name: Show download result
+      debug:
+        var: download_result
+
+    - name: Check if priv_validator_state.json exists
+      stat:
+        path: "{{ home_dir }}/.story/story/data/priv_validator_state.json"
+      register: priv_validator_state
+
+    - name: Backup priv_validator_state.json if it exists
+      copy:
+        src: "{{ home_dir }}/.story/story/data/priv_validator_state.json"
+        dest: "{{ home_dir }}/.story/story/priv_validator_state.json.backup"
+        remote_src: yes
+      when: priv_validator_state.stat.exists
+
+    - name: Extract the Snapshot
+      shell: |
+        pv {{ home_dir }}/{{ snapshot_filename }} | lz4 -cd | tar -x -C {{ home_dir }}/.story/story
+      args:
+        executable: /bin/bash
+
+    - name: Restore priv_validator_state.json if backup exists
+      copy:
+        src: "{{ home_dir }}/.story/story/priv_validator_state.json.backup"
+        dest: "{{ home_dir }}/.story/story/data/priv_validator_state.json"
+        remote_src: yes
+      when: priv_validator_state.stat.exists
+
+    - name: Clean Up snapshot file
+      file:
+        path: "{{ home_dir }}/{{ snapshot_filename }}"
+        state: absent
+
+    - name: Fetch peers
+      shell: |
+        curl -sS {{ PEERS_URL }} | jq -r '.result.peers[] | "\(.node_info.id)@\(.remote_ip):\(.node_info.listen_addr)"' | awk -F ':' '{print $1":"$(NF)}' | paste -sd, -
+      register: peers
+
+    - name: Update config.toml with peers
+      lineinfile:
+        path: "{{ home_dir }}/.story/story/config/config.toml"
+        regexp: '^persistent_peers *=.*'
+        line: 'persistent_peers = "{{ peers.stdout }}"'
+        backup: yes
+
+    - name: Download addrbook.json
+      get_url:
+        url: "{{ ADDRBOOK_URL }}"
+        dest: "{{ ADDRBOOK_FILE }}"    
+    
+    - name: Create story-consensus-node service
+      template:
+        src: templates/story-consensus-node.service.j2
+        dest: /etc/systemd/system/story-consensus-node.service
+        mode: '0644'
+
+    - name: Create story-geth-node service
+      template:
+        src: templates/story-geth-node.service.j2
+        dest: /etc/systemd/system/story-geth-node.service
+        mode: '0644'
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Ensure services are stopped
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: yes
+      loop:
+        - story-consensus-node
+        - story-geth-node
+
+    - name: Clean up downloaded tar.gz files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "geth-linux-amd64-{{ geth_version }}.tar.gz"
+        - "story-linux-amd64-{{ story_version }}.tar.gz"
+ 
+    - name: Export validator EVM key
+      shell: story validator export --export-evm-key
+      register: evm_key_export
+
+    - name: Display private key location
+      debug:
+        msg: "The EVM private key is saved at: {{ home_dir }}/.story/story/config/private_key.txt"
