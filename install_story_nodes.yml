@@ -6,11 +6,11 @@
   vars:
     GO_VERSION: "1.23.0"
     geth_version: "0.9.2-ea9f0d2"
-    story_version: "0.9.11-2a25df1"
+    story_version: "0.10.0-9603826"
     home_dir: "/root"
-    APP_HOME: "/root/.story/story"
+    APP_HOME: "/root/.story"
     ADDRBOOK_URL: "https://server-5.itrocket.net/testnet/story/addrbook.json"
-    ADDRBOOK_FILE: "{{ APP_HOME }}/config/addrbook.json"
+    ADDRBOOK_FILE: "{{ APP_HOME }}/story/config/addrbook.json"
     PEERS_URL: "https://story-testnet-rpc.itrocket.net/net_info"
     SNAPSHOT_BASE_URL: "https://server-5.itrocket.net/testnet/story/"
     
@@ -109,6 +109,12 @@
 
     - name: Initialize story node
       shell: story init --network iliad --moniker "{{ moniker }}"
+
+    - name: Get latest snapshot filename
+      uri:
+        url: "{{ SNAPSHOT_BASE_URL }}"
+        return_content: yes
+      register: snapshot_page
 
     - name: Extract all snapshot filenames
       set_fact:
@@ -209,8 +215,8 @@
         path: "{{ item }}"
         state: absent
       loop:
-        - "geth-linux-amd64-{{ geth_version }}.tar.gz"
-        - "story-linux-amd64-{{ story_version }}.tar.gz"
+        - "geth-linux-amd64-*"
+        - "story-linux-amd64-*"
  
     - name: Export validator EVM key
       shell: story validator export --export-evm-key
