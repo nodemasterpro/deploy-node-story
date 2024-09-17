@@ -129,9 +129,10 @@
         msg: "Downloading snapshot: {{ snapshot_filename }}"
 
     - name: Download snapshot
-      get_url:
-        url: "{{ SNAPSHOT_BASE_URL }}{{ snapshot_filename }}"
-        dest: "/root/{{ snapshot_filename }}"
+      shell: |
+        wget -q --show-progress --inet4-only {{ SNAPSHOT_BASE_URL }}{{ snapshot_filename }} -O /root/{{ snapshot_filename }}
+      args:
+        executable: /bin/bash
       register: download_result
 
     - name: Show download result
