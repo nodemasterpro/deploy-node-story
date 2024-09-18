@@ -153,7 +153,7 @@
 
     - name: Extract the Snapshot
       shell: |
-        pv {{ home_dir }}/{{ snapshot_filename }} | lz4 -cd | tar -x -C {{ home_dir }}/.story/story
+        pv {{ home_dir }}/{{ snapshot_filename }} | lz4 -cd | tar -x -C {{ home_dir }}/.story
       args:
         executable: /bin/bash
 

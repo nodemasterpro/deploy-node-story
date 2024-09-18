@@ -73,12 +73,12 @@ To exit the logs, type Ctrl+C.
 
 Regularly check these logs to ensure everything is running smoothly.
 
-## Step 5: Requesting Story Testnet Funds
-You need 0.5 IP for registering your node as a validator. Get funds for your wallet through Faucetme by logging in with your Discord and joining their Discord.
+## Step 5: Setting up your Metamask Story Node Wallet
+To register your node as a validator, you need to fund it by obtaining tokens from a faucet using your node’s public address. To obtain this public address, import your node’s private key into a MetaMask wallet. As a reminder, the private key is present in “/root/.story/story/config/private_key.txt”. Add the testnet Story network to this wallet. If you don’t have it, you can add it automatically from the chainlist website.
 
-Enter the hexadecimal address of your node. As a reminder, the hexadecimal address is present in /root/.story/story/config/private_key.txt.
 
-You will receive 2 IP. You can only make one request every 24 hours.
+## Step 6:Requesting Story Testnet Funds
+You need 0.5 IP for registering your node as a validator. Get funds for your wallet through faucetme by logging in with your discord and joining their discord. Then, enter the public address of your node’s metamask wallet. You will get 2 IP. You can only make one request every 24 hours.
 
 ## Step 6: Node Synchronization Verification
 Ensure your node is fully synchronized with the Story blockchain:
