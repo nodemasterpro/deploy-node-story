@@ -3,10 +3,8 @@
   hosts: localhost
   become: true
 
-  vars_prompt:
-    - name: stake_amount
-      prompt: "Enter the stake amount (in wei, e.g., 500000000000000000 for 0.5 IP)"
-      private: false
+  vars:
+    stake_amount: "500000000000000000"
 
   tasks:
     - name: Read private key
