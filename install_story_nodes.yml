@@ -78,6 +78,7 @@
         - name: Verify Go installation
           shell: go version
           register: go_version_verify
+          environment: "{{ ansible_env }}"
           
         - name: Display Go version
           debug:
