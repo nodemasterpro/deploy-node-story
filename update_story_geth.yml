@@ -1,0 +1,62 @@
+---
+- name: Update Story-Geth Client
+  hosts: all
+  become: true
+
+  vars:
+    geth_version: "0.9.3-b224fdf"
+    home_dir: "/root"
+
+  tasks:
+    - name: Download new story-geth version
+      get_url:
+        url: "https://story-geth-binaries.s3.us-west-1.amazonaws.com/geth-public/geth-linux-amd64-{{ geth_version }}.tar.gz"
+        dest: "{{ home_dir }}/geth-linux-amd64-{{ geth_version }}.tar.gz"
+
+    - name: Extract new geth binary
+      unarchive:
+        src: "{{ home_dir }}/geth-linux-amd64-{{ geth_version }}.tar.gz"
+        dest: "{{ home_dir }}"
+        remote_src: yes
+
+    - name: Stop story-geth-node service
+      systemd:
+        name: story-geth-node
+        state: stopped
+
+    - name: Replace old geth binary with new one
+      copy:
+        src: "{{ home_dir }}/geth-linux-amd64-{{ geth_version }}/geth"
+        dest: "/usr/local/bin/geth"
+        mode: '0755'
+        remote_src: yes
+
+    - name: Start story-geth-node service
+      systemd:
+        name: story-geth-node
+        state: started
+
+    - name: Clean up downloaded files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ home_dir }}/geth-linux-amd64-{{ geth_version }}.tar.gz"
+        - "{{ home_dir }}/geth-linux-amd64-{{ geth_version }}"
+
+    - name: Verify geth version
+      command: geth version
+      register: geth_version_output
+
+    - name: Display geth version
+      debug:
+        var: geth_version_output.stdout_lines
+
+    - name: Check story-geth-node service status
+      systemd:
+        name: story-geth-node
+      register: service_status
+
+    - name: Display service status
+      debug:
+        var: service_status.status
