@@ -44,12 +44,28 @@
         - "{{ home_dir }}/story-linux-amd64-{{ consensus_version }}.tar.gz"
         - "{{ home_dir }}/story-linux-amd64-{{ consensus_version }}"
 
+    - name: Restart story-geth-node service
+      systemd:
+        name: story-geth-node
+        state: restarted
+
+    - name: Restart story-consensus-node service
+      systemd:
+        name: story-consensus-node
+        state: restarted
 
     - name: Check story-consensus-node service status
       systemd:
         name: story-consensus-node
-      register: service_status
+      register: consensus_service_status
 
-    - name: Display service status
+    - name: Check story-geth-node service status
+      systemd:
+        name: story-geth-node
+      register: geth_service_status
+
+    - name: Display service statuses
       debug:
-        msg: "Service status: {{ service_status.status.ActiveState }}"
+        msg: 
+          - "Story Consensus Node service status: {{ consensus_service_status.status.ActiveState }}"
+          - "Story Geth Node service status: {{ geth_service_status.status.ActiveState }}"
