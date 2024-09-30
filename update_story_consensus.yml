@@ -27,7 +27,7 @@
     - name: Replace old story-consensus binary with new one
       copy:
         src: "{{ home_dir }}/story-linux-amd64-{{ consensus_version }}/story"
-        dest: "/usr/local/bin/story-consensus"
+        dest: "/usr/local/bin/story"
         mode: '0755'
         remote_src: yes
 
@@ -44,11 +44,11 @@
         - "{{ home_dir }}/story-linux-amd64-{{ consensus_version }}.tar.gz"
         - "{{ home_dir }}/story-linux-amd64-{{ consensus_version }}"
 
-    - name: Verify story-consensus version
-      command: story-consensus version
+    - name: Verify story version
+      command: story version
       register: consensus_version_output
 
-    - name: Display story-consensus version
+    - name: Display story version
       debug:
         var: consensus_version_output.stdout_lines
 
@@ -59,4 +59,4 @@
 
     - name: Display service status
       debug:
-        var: service_status.status
+        msg: "Service status: {{ service_status.status.ActiveState }}"
