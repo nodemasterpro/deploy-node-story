@@ -44,14 +44,6 @@
         - "{{ home_dir }}/story-linux-amd64-{{ consensus_version }}.tar.gz"
         - "{{ home_dir }}/story-linux-amd64-{{ consensus_version }}"
 
-    - name: Verify story version
-      shell: |
-        /usr/local/bin/story version
-      register: consensus_version_output
-
-    - name: Display story version
-      debug:
-        msg: "{{ consensus_version_output.stdout_lines }}"
 
     - name: Check story-consensus-node service status
       systemd:
