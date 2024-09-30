@@ -1,0 +1,62 @@
+---
+- name: Update Story Consensus Node
+  hosts: all
+  become: true
+
+  vars:
+    consensus_version: "0.10.1-57567e5"
+    home_dir: "/root"
+
+  tasks:
+    - name: Download new story-consensus version
+      get_url:
+        url: "https://story-geth-binaries.s3.us-west-1.amazonaws.com/story-public/story-linux-amd64-{{ consensus_version }}.tar.gz"
+        dest: "{{ home_dir }}/story-linux-amd64-{{ consensus_version }}.tar.gz"
+
+    - name: Extract new story-consensus binary
+      unarchive:
+        src: "{{ home_dir }}/story-linux-amd64-{{ consensus_version }}.tar.gz"
+        dest: "{{ home_dir }}"
+        remote_src: yes
+
+    - name: Stop story-consensus-node service
+      systemd:
+        name: story-consensus-node
+        state: stopped
+
+    - name: Replace old story-consensus binary with new one
+      copy:
+        src: "{{ home_dir }}/story-linux-amd64-{{ consensus_version }}/story"
+        dest: "/usr/local/bin/story-consensus"
+        mode: '0755'
+        remote_src: yes
+
+    - name: Start story-consensus-node service
+      systemd:
+        name: story-consensus-node
+        state: started
+
+    - name: Clean up downloaded files
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ home_dir }}/story-linux-amd64-{{ consensus_version }}.tar.gz"
+        - "{{ home_dir }}/story-linux-amd64-{{ consensus_version }}"
+
+    - name: Verify story-consensus version
+      command: story-consensus version
+      register: consensus_version_output
+
+    - name: Display story-consensus version
+      debug:
+        var: consensus_version_output.stdout_lines
+
+    - name: Check story-consensus-node service status
+      systemd:
+        name: story-consensus-node
+      register: service_status
+
+    - name: Display service status
+      debug:
+        var: service_status.status

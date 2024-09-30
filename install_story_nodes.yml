@@ -6,7 +6,7 @@
   vars:
     GO_VERSION: "1.23.0"
     geth_version: "0.9.3-b224fdf"
-    story_version: "0.10.0-9603826"
+    story_version: "0.10.1-57567e5"
     home_dir: "/root"
     APP_HOME: "/root/.story"
     ADDRBOOK_URL: "https://server-5.itrocket.net/testnet/story/addrbook.json"
