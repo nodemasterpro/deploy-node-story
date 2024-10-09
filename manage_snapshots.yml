@@ -1,0 +1,84 @@
+---
+- name: Manage Story Snapshots
+  hosts: localhost
+  become: yes
+  vars:
+    action: "{{ action | default('download') }}"
+    snapshot_type: "{{ snapshot_type | default('pruned') }}"
+    archive_url_base: "https://snapshots.mandragora.io"
+    pruned_url_base: "https://snapshots2.mandragora.io/story"
+    snapshot_dir: "/root/.story/snapshots"
+    home_dir: "/root/.story"
+
+  tasks:
+    - name: Ensure snapshot directories exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ snapshot_dir }}/archive"
+        - "{{ snapshot_dir }}/pruned"
+      when: action == "download"
+
+    - name: Download snapshots
+      get_url:
+        url: "{{ item.url }}/{{ item.file }}"
+        dest: "{{ snapshot_dir }}/{{ snapshot_type }}/{{ item.file }}"
+      loop:
+        - { url: "{{ archive_url_base if snapshot_type == 'archive' else pruned_url_base }}", file: "geth_snapshot.lz4" }
+        - { url: "{{ archive_url_base if snapshot_type == 'archive' else pruned_url_base }}", file: "story_snapshot.lz4" }
+      when: action == "download"
+
+    - name: Stop story-geth-node and story-consensus-node services
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - story-geth-node
+        - story-consensus-node
+      when: action == "import"
+
+    - name: Backup validator state
+      copy:
+        src: "{{ home_dir }}/story/data/priv_validator_state.json"
+        dest: "{{ home_dir }}/priv_validator_state.json.backup"
+        remote_src: yes
+      when: action == "import"
+
+    - name: Delete previous chaindata and story data
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ home_dir }}/geth/iliad/geth/chaindata"
+        - "{{ home_dir }}/story/data"
+      when: action == "import"
+
+    - name: Extract geth snapshot
+      shell: "lz4 -c -d {{ snapshot_dir }}/{{ snapshot_type }}/geth_snapshot.lz4 | tar -xv -C {{ home_dir }}/geth/iliad/geth"
+      when: action == "import"
+
+    - name: Extract story snapshot
+      shell: "lz4 -c -d {{ snapshot_dir }}/{{ snapshot_type }}/story_snapshot.lz4 | tar -xv -C {{ home_dir }}/story"
+      when: action == "import"
+
+    - name: Restore validator state
+      copy:
+        src: "{{ home_dir }}/priv_validator_state.json.backup"
+        dest: "{{ home_dir }}/story/data/priv_validator_state.json"
+        remote_src: yes
+      when: action == "import"
+
+    - name: Start story-geth-node and story-consensus-node services
+      systemd:
+        name: "{{ item }}"
+        state: started
+      loop:
+        - story-geth-node
+        - story-consensus-node
+      when: action == "import"
+
+    - name: Display completion message
+      debug:
+        msg: "{{ action | capitalize }} of {{ snapshot_type }} snapshot has been completed successfully."

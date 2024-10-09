@@ -1,0 +1,129 @@
+---
+- name: Install and Configure Grafana and Prometheus
+  hosts: all
+  become: true
+
+  vars:
+    grafana_version: "8.4.5"
+    prometheus_version: "2.37.0"
+    node_exporter_version: "1.3.1"
+    cosmos_exporter_version: "v0.3.0"
+
+  tasks:
+    - name: Install dependencies
+      apt:
+        name:
+          - apt-transport-https
+          - software-properties-common
+        state: present
+
+    - name: Add Grafana GPG key
+      apt_key:
+        url: https://packages.grafana.com/gpg.key
+        state: present
+
+    - name: Add Grafana repository
+      apt_repository:
+        repo: deb https://packages.grafana.com/oss/deb stable main
+        state: present
+
+    - name: Install Grafana
+      apt:
+        name: grafana={{ grafana_version }}
+        state: present
+        update_cache: yes
+
+    - name: Download and install Prometheus
+      unarchive:
+        src: https://github.com/prometheus/prometheus/releases/download/v{{ prometheus_version }}/prometheus-{{ prometheus_version }}.linux-amd64.tar.gz
+        dest: /usr/local
+        remote_src: yes
+        creates: /usr/local/prometheus-{{ prometheus_version }}.linux-amd64
+
+    - name: Create Prometheus symlink
+      file:
+        src: /usr/local/prometheus-{{ prometheus_version }}.linux-amd64
+        dest: /usr/local/prometheus
+        state: link
+
+    - name: Download and install Node Exporter
+      unarchive:
+        src: https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
+        dest: /usr/local
+        remote_src: yes
+        creates: /usr/local/node_exporter-{{ node_exporter_version }}.linux-amd64
+
+    - name: Create Node Exporter symlink
+      file:
+        src: /usr/local/node_exporter-{{ node_exporter_version }}.linux-amd64
+        dest: /usr/local/node_exporter
+        state: link
+
+    - name: Download and install Cosmos Exporter
+      get_url:
+        url: https://github.com/solarlabsteam/cosmos-exporter/releases/download/{{ cosmos_exporter_version }}/cosmos-exporter_{{ cosmos_exporter_version }}_Linux_x86_64.tar.gz
+        dest: /tmp/cosmos-exporter.tar.gz
+
+    - name: Extract Cosmos Exporter
+      unarchive:
+        src: /tmp/cosmos-exporter.tar.gz
+        dest: /usr/local/bin
+        remote_src: yes
+
+    - name: Create Prometheus configuration
+      template:
+        src: templates/prometheus.yml.j2
+        dest: /usr/local/prometheus/prometheus.yml
+
+    - name: Create Grafana configuration
+      template:
+        src: templates/grafana.ini.j2
+        dest: /etc/grafana/grafana.ini
+
+    - name: Create Grafana datasource
+      template:
+        src: templates/datasource.yml.j2
+        dest: /etc/grafana/provisioning/datasources/prometheus.yml
+
+    - name: Create Grafana dashboard
+      template:
+        src: templates/dashboard.yml.j2
+        dest: /etc/grafana/provisioning/dashboards/cosmos-validator.yml
+
+    - name: Download Cosmos Validator dashboard JSON
+      get_url:
+        url: https://grafana.com/api/dashboards/16580/revisions/1/download
+        dest: /var/lib/grafana/dashboards/cosmos-validator.json
+
+    - name: Create systemd service files
+      template:
+        src: "templates/{{ item }}.service.j2"
+        dest: "/etc/systemd/system/{{ item }}.service"
+      loop:
+        - prometheus
+        - node_exporter
+        - cosmos-exporter
+
+    - name: Start and enable services
+      systemd:
+        name: "{{ item }}"
+        state: started
+        enabled: yes
+        daemon_reload: yes
+      loop:
+        - grafana-server
+        - prometheus
+        - node_exporter
+        - cosmos-exporter
+
+    - name: Wait for Grafana to start
+      wait_for:
+        port: 3000
+        timeout: 60
+
+    - name: Display Grafana login information
+      debug:
+        msg: 
+          - "Grafana is now accessible at http://your_server_ip:3000"
+          - "Default login: admin / admin"
+          - "Please change the password after first login"

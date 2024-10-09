@@ -1,0 +1,56 @@
+---
+- name: Backup or Restore Story Validator Keys
+  hosts: localhost
+  vars:
+    action: "{{ action | default('backup') }}"
+    backup_dir: "/root/backup-keys-story"
+
+  tasks:
+    - name: Ensure backup directory exists
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+        mode: '0700'
+
+    - name: Backup keys
+      block:
+        - name: Backup EVM private key
+          copy:
+            src: "/root/.story/story/config/private_key.txt"
+            dest: "{{ backup_dir }}/private_key.txt"
+            mode: '0600'
+          
+        - name: Backup priv_validator_key.json
+          copy:
+            src: "/root/.story/story/config/priv_validator_key.json"
+            dest: "{{ backup_dir }}/priv_validator_key.json"
+            mode: '0600'
+          
+        - name: Create archive of backup files
+          archive:
+            path:
+              - "{{ backup_dir }}/private_key.txt"
+              - "{{ backup_dir }}/priv_validator_key.json"
+            dest: "{{ backup_dir }}/story_keys_backup.tar.gz"
+            format: gz
+      when: action == "backup"
+
+    - name: Restore keys
+      block:
+        - name: Extract backup archive
+          unarchive:
+            src: "{{ backup_dir }}/story_keys_backup.tar.gz"
+            dest: "{{ backup_dir }}"
+          
+        - name: Restore EVM private key
+          copy:
+            src: "{{ backup_dir }}/private_key.txt"
+            dest: "/root/.story/story/config/private_key.txt"
+            mode: '0600'
+          
+        - name: Restore priv_validator_key.json
+          copy:
+            src: "{{ backup_dir }}/priv_validator_key.json"
+            dest: "/root/.story/story/config/priv_validator_key.json"
+            mode: '0600'
+      when: action == "restore"

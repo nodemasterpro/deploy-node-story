@@ -1,0 +1,29 @@
+---
+- name: Create data.json file
+  hosts: localhost
+  vars_prompt:
+    - name: validator_address
+      prompt: "Entrez l'adresse de votre validateur (valoper)"
+      private: no
+    - name: discord_id
+      prompt: "Entrez votre ID Discord"
+      private: no
+    - name: discord_username
+      prompt: "Entrez votre nom d'utilisateur Discord"
+      private: no
+
+  tasks:
+    - name: Ensure directory exists
+      file:
+        path: "/root/.story"
+        state: directory
+
+    - name: Create data.json
+      copy:
+        content: |
+          {
+            "validator_address": "{{ validator_address }}",
+            "discord_id": "{{ discord_id }}",
+            "discord_username": "{{ discord_username }}"
+          }
+        dest: "/root/.story/data.json"

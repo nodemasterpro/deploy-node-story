@@ -12,7 +12,7 @@
     ADDRBOOK_URL: "https://server-5.itrocket.net/testnet/story/addrbook.json"
     ADDRBOOK_FILE: "{{ APP_HOME }}/story/config/addrbook.json"
     PEERS_URL: "https://story-testnet-rpc.itrocket.net/net_info"
-    SNAPSHOT_BASE_URL: "https://server-5.itrocket.net/testnet/story/"
+    SNAPSHOT_BASE_URL: "https://server-3.itrocket.net/testnet/story/"
     
  
   vars_prompt:
@@ -111,7 +111,7 @@
     - name: Initialize story node
       shell: story init --network iliad --moniker "{{ moniker }}"
 
-    - name: Get latest snapshot filename
+    - name: Get latest snapshot filenames
       uri:
         url: "{{ SNAPSHOT_BASE_URL }}"
         return_content: yes
@@ -119,26 +119,19 @@
 
     - name: Extract all snapshot filenames
       set_fact:
-        all_snapshots: "{{ snapshot_page.content | regex_findall('story_\\d{4}-\\d{2}-\\d{2}_\\d+_snap\\.tar\\.lz4') }}"
+        story_snapshots: "{{ snapshot_page.content | regex_findall('story_\\d{4}-\\d{2}-\\d{2}_\\d+_snap\\.tar\\.lz4') }}"
+        geth_snapshots: "{{ snapshot_page.content | regex_findall('geth_story_\\d{4}-\\d{2}-\\d{2}_\\d+_snap\\.tar\\.lz4') }}"
 
     - name: Sort snapshots and get the latest
       set_fact:
-        snapshot_filename: "{{ all_snapshots | sort | last }}"
+        story_snapshot_filename: "{{ story_snapshots | sort | last }}"
+        geth_snapshot_filename: "{{ geth_snapshots | sort | last }}"
 
-    - name: Display snapshot filename
+    - name: Display snapshot filenames
       debug:
-        msg: "Downloading snapshot: {{ snapshot_filename }}"
-
-    - name: Download snapshot
-      shell: |
-        wget -q --show-progress --inet4-only {{ SNAPSHOT_BASE_URL }}{{ snapshot_filename }} -O /root/{{ snapshot_filename }}
-      args:
-        executable: /bin/bash
-      register: download_result
-
-    - name: Show download result
-      debug:
-        var: download_result
+        msg: 
+          - "Downloading Story snapshot: {{ story_snapshot_filename }}"
+          - "Downloading Geth snapshot: {{ geth_snapshot_filename }}"
 
     - name: Check if priv_validator_state.json exists
       stat:
@@ -152,11 +145,35 @@
         remote_src: yes
       when: priv_validator_state.stat.exists
 
-    - name: Extract the Snapshot
+    - name: Stop story-consensus-node and story-geth-node services
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - story-consensus-node
+        - story-geth-node
+
+    - name: Remove old Story data
+      file:
+        path: "{{ home_dir }}/.story/story/data"
+        state: absent
+    
+    
+    - name: Download Story snapshot
+      shell: "wget -q --show-progress -O /root/{{ story_snapshot_filename }} {{ SNAPSHOT_BASE_URL }}{{ story_snapshot_filename }} --inet4-only"
+      args:
+        chdir: "/root"
+    
+    - name: Extract Story snapshot
       shell: |
-        pv {{ home_dir }}/{{ snapshot_filename }} | lz4 -cd | tar -x -C {{ home_dir }}/.story
+        lz4 -cd /root/{{ story_snapshot_filename }} | tar -xf - -C {{ home_dir }}/.story/story
       args:
         executable: /bin/bash
+
+    - name: Remove downloaded Story snapshot file
+      file:
+        path: "/root/{{ story_snapshot_filename }}"
+        state: absent
 
     - name: Restore priv_validator_state.json if backup exists
       copy:
@@ -165,11 +182,36 @@
         remote_src: yes
       when: priv_validator_state.stat.exists
 
-    - name: Clean Up snapshot file
+    - name: Ensure Geth data directory exists
       file:
-        path: "{{ home_dir }}/{{ snapshot_filename }}"
+        path: "{{ home_dir }}/.story/geth/iliad/geth"
+        state: directory
+        mode: '0755'
+    
+    - name: Remove old Geth data
+      file:
+        path: "{{ home_dir }}/.story/geth/iliad/geth/chaindata"
         state: absent
 
+    
+    - name: Download Geth snapshot
+      shell: "wget -q --show-progress -O /root/{{ geth_snapshot_filename }} {{ SNAPSHOT_BASE_URL }}{{ geth_snapshot_filename }} --inet4-only"
+      args:
+        chdir: "/root"
+     
+    
+    - name: Extract Geth snapshot
+      shell: |
+        lz4 -cd /root/{{ geth_snapshot_filename }} | tar -xf - -C {{ home_dir }}/.story/geth/iliad/geth
+      args:
+        executable: /bin/bash
+
+    - name: Remove downloaded Geth snapshot file
+      file:
+        path: "/root/{{ geth_snapshot_filename }}"
+        state: absent
+
+    
     - name: Fetch peers
       shell: |
         curl -sS {{ PEERS_URL }} | jq -r '.result.peers[] | "\(.node_info.id)@\(.remote_ip):\(.node_info.listen_addr)"' | awk -F ':' '{print $1":"$(NF)}' | paste -sd, -
@@ -227,3 +269,4 @@
     - name: Display private key location
       debug:
         msg: "The EVM private key is saved at: {{ home_dir }}/.story/story/config/private_key.txt"
+

@@ -1,0 +1,18 @@
+[Unit]
+Description=Cosmos Exporter
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=cosmos-exporter
+Group=cosmos-exporter
+Type=simple
+ExecStart=/usr/local/bin/cosmos-exporter \
+    --denom uip \
+    --denom-coefficient 1000000 \
+    --bech-prefix story \
+    --tendermint-rpc http://localhost:26657 \
+    --node http://localhost:1317
+
+[Install]
+WantedBy=multi-user.target
