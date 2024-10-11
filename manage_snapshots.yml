@@ -8,6 +8,7 @@
     pruned_url_base: "https://server-3.itrocket.net/testnet/story"
     archive_url_base: "https://server-5.itrocket.net/testnet/story"
     home_dir: "/root/.story"
+    snapshot_dir: "/root/snapshots"
 
   tasks:
     - name: Install dependencies
@@ -19,21 +20,11 @@
           - aria2
         state: present
 
-    - name: Stop story and story-geth services
-      systemd:
-        name: "{{ item }}"
-        state: stopped
-      loop:
-        - story
-        - story-geth
-      when: action == "import"
-
-    - name: Backup priv_validator_state.json
-      copy:
-        src: "{{ home_dir }}/story/data/priv_validator_state.json"
-        dest: "{{ home_dir }}/story/priv_validator_state.json.backup"
-        remote_src: yes
-      when: action == "import"
+    - name: Create snapshot directory
+      file:
+        path: "{{ snapshot_dir }}"
+        state: directory
+        mode: '0755'
 
     - name: Get latest snapshot filenames
       uri:
@@ -46,61 +37,52 @@
         story_snapshot: "{{ snapshot_page.content | regex_findall('story_\\d{4}-\\d{2}-\\d{2}_\\d+_snap\\.tar\\.lz4') | sort | last }}"
         geth_snapshot: "{{ snapshot_page.content | regex_findall('geth_story_\\d{4}-\\d{2}-\\d{2}_\\d+_snap\\.tar\\.lz4') | sort | last }}"
 
-    - name: Download pruned snapshots
-      shell: "curl {{ pruned_url_base }}/{{ item }} | lz4 -dc - | tar -xf - -C {{ home_dir }}/{{ 'story' if 'story_' in item else 'geth/iliad/geth' }}"
+    - name: Download snapshots
+      get_url:
+        url: "{{ (snapshot_type == 'pruned') | ternary(pruned_url_base, archive_url_base) }}/{{ item }}"
+        dest: "{{ snapshot_dir }}/{{ item }}"
       loop:
         - "{{ story_snapshot }}"
         - "{{ geth_snapshot }}"
-      when: action == "download" and snapshot_type == "pruned"
+      when: action == "download"
 
-    - name: Download archive snapshots
-      shell: "aria2c -x 16 -s 16 -d /tmp -o {{ item }} {{ archive_url_base }}/{{ item }}"
+    - name: Display download completion message
+      debug:
+        msg: "Download of {{ snapshot_type }} snapshot has been completed successfully. Files are stored in {{ snapshot_dir }}."
+      when: action == "download"
+
+    - name: Stop story and story-geth services
+      systemd:
+        name: "{{ item }}"
+        state: stopped
       loop:
-        - "{{ story_snapshot }}"
-        - "{{ geth_snapshot }}"
-      when: action == "download" and snapshot_type == "archive"
+        - story-consensus-node
+        - story-geth-node
+      when: action == "import"
 
-    - name: Import pruned snapshots
-      block:
-        - name: Remove old data
-          file:
-            path: "{{ item }}"
-            state: absent
-          loop:
-            - "{{ home_dir }}/story/data"
-            - "{{ home_dir }}/geth/iliad/geth/chaindata"
+    - name: Backup priv_validator_state.json
+      copy:
+        src: "{{ home_dir }}/story/data/priv_validator_state.json"
+        dest: "{{ home_dir }}/story/priv_validator_state.json.backup"
+        remote_src: yes
+      when: action == "import"
 
-        - name: Extract Story snapshot
-          shell: "curl {{ pruned_url_base }}/{{ story_snapshot }} | lz4 -dc - | tar -xf - -C {{ home_dir }}/story"
+    - name: Remove old data
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ home_dir }}/story/data"
+        - "{{ home_dir }}/geth/iliad/geth/chaindata"
+      when: action == "import"
 
-        - name: Extract Geth snapshot
-          shell: "curl {{ pruned_url_base }}/{{ geth_snapshot }} | lz4 -dc - | tar -xf - -C {{ home_dir }}/geth/iliad/geth"
-      when: action == "import" and snapshot_type == "pruned"
+    - name: Extract Story snapshot
+      shell: "lz4 -dc {{ snapshot_dir }}/{{ story_snapshot }} | tar -xf - -C {{ home_dir }}/story"
+      when: action == "import"
 
-    - name: Import archive snapshots
-      block:
-        - name: Remove old data
-          file:
-            path: "{{ item }}"
-            state: absent
-          loop:
-            - "{{ home_dir }}/story/data"
-            - "{{ home_dir }}/geth/iliad/geth/chaindata"
-
-        - name: Extract Story snapshot
-          shell: "tar -I lz4 -xvf /tmp/{{ story_snapshot }} -C {{ home_dir }}"
-
-        - name: Extract Geth snapshot
-          shell: "tar -I lz4 -xvf /tmp/{{ geth_snapshot }} -C {{ home_dir }}/geth/iliad/geth"
-
-        - name: Remove downloaded archive snapshots
-          file:
-            path: "/tmp/{{ item }}"
-            state: absent
-          loop:
-            - "{{ story_snapshot }}"
-            - "{{ geth_snapshot }}"
-      when: action == "import" and snapshot_type == "archive"
+    - name: Extract Geth snapshot
+      shell: "lz4 -dc {{ snapshot_dir }}/{{ geth_snapshot }} | tar -xf - -C {{ home_dir }}/geth/iliad/geth"
+      when: action == "import"
 
     - name: Restore priv_validator_state.json
       copy:
@@ -109,15 +91,25 @@
         remote_src: yes
       when: action == "import"
 
+    - name: Remove snapshot files
+      file:
+        path: "{{ snapshot_dir }}/{{ item }}"
+        state: absent
+      loop:
+        - "{{ story_snapshot }}"
+        - "{{ geth_snapshot }}"
+      when: action == "import"
+
     - name: Start story and story-geth services
       systemd:
         name: "{{ item }}"
         state: started
       loop:
-        - story
-        - story-geth
+        - story-consensus-node
+        - story-geth-node
       when: action == "import"
 
-    - name: Display completion message
+    - name: Display import completion message
       debug:
-        msg: "{{ action | capitalize }} of {{ snapshot_type }} snapshot has been completed successfully."
+        msg: "Import of {{ snapshot_type }} snapshot has been completed successfully. Snapshot files have been removed."
+      when: action == "import"
