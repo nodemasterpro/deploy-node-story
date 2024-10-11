@@ -7,7 +7,7 @@
     grafana_version: "8.4.5"
     prometheus_version: "2.37.0"
     node_exporter_version: "1.3.1"
-    cosmos_exporter_version: "v0.3.0"
+    cosmos_exporter_version: "0.3.0"
 
   tasks:
     - name: Install dependencies
@@ -32,6 +32,7 @@
         name: grafana={{ grafana_version }}
         state: present
         update_cache: yes
+        allow_downgrade: yes
 
     - name: Download and install Prometheus
       unarchive:
@@ -61,7 +62,7 @@
 
     - name: Download and install Cosmos Exporter
       get_url:
-        url: https://github.com/solarlabsteam/cosmos-exporter/releases/download/{{ cosmos_exporter_version }}/cosmos-exporter_{{ cosmos_exporter_version }}_Linux_x86_64.tar.gz
+        url: https://github.com/solarlabsteam/cosmos-exporter/releases/download/v{{ cosmos_exporter_version }}/cosmos-exporter_{{ cosmos_exporter_version }}_Linux_x86_64.tar.gz
         dest: /tmp/cosmos-exporter.tar.gz
 
     - name: Extract Cosmos Exporter
@@ -85,6 +86,14 @@
         src: templates/datasource.yml.j2
         dest: /etc/grafana/provisioning/datasources/prometheus.yml
 
+    - name: Create Grafana dashboards directory
+      file:
+        path: /var/lib/grafana/dashboards
+        state: directory
+        mode: '0755'
+        owner: grafana
+        group: grafana
+
     - name: Create Grafana dashboard
       template:
         src: templates/dashboard.yml.j2
@@ -101,8 +110,36 @@
         dest: "/etc/systemd/system/{{ item }}.service"
       loop:
         - prometheus
+        - grafana
         - node_exporter
-        - cosmos-exporter
+        - cosmos_exporter
+
+    - name: Ensure Grafana directories exist
+      file:
+        path: "{{ item }}"
+        state: directory
+        owner: grafana
+        group: grafana
+        mode: '0755'
+      loop:
+        - /var/lib/grafana
+        - /var/log/grafana
+        - /var/run/grafana
+
+    - name: Set correct permissions for Grafana configuration
+      file:
+        path: /etc/grafana
+        owner: grafana
+        group: grafana
+        recurse: yes
+
+    - name: Ensure Grafana can write to its PID file
+      file:
+        path: /var/run/grafana/grafana-server.pid
+        state: touch
+        owner: grafana
+        group: grafana
+        mode: '0644'
 
     - name: Start and enable services
       systemd:
@@ -111,10 +148,10 @@
         enabled: yes
         daemon_reload: yes
       loop:
-        - grafana-server
+        - grafana
         - prometheus
         - node_exporter
-        - cosmos-exporter
+        - cosmos_exporter
 
     - name: Wait for Grafana to start
       wait_for:

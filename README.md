@@ -45,12 +45,23 @@ Clone this repository to access the Ansible playbook and all necessary files:
 git clone https://github.com/nodemasterpro/deploy-node-story.git
 cd deploy-node-story
 ```
-## Step 3: Installing the Story Validator Node
-Execute the playbook using the following command, specifying the moniker (node name) as an extra variable:
+## Step 2: Using the Story Node Manager
+After cloning the repository, you can use the Story Node Manager script for various operations:
 
-```
-ansible-playbook install_story_nodes.yml -e moniker="your_node_name"
-```
+1. To install a new Story node:
+   ```
+   ./story_node_manager.sh install your_node_name
+   ```
+
+2. To update an existing Story node:
+   ```
+   ./story_node_manager.sh update
+   ```
+
+3. To view the status of your Story node:
+   ```
+   ./story_node_manager.sh status
+   ```
 Note: Replace "your_node_name" with the unique name you wish to assign to your node. Installation takes about 45 minutes due to downloading and importing the snapshot.
 
 Once completed, you can find your private key in /root/.story/story/config/private_key.txt. Save it securely, as it will be useful for the next steps.
@@ -103,6 +114,9 @@ After successfully creating your validator, you can view it on the Story explore
 Congratulations! Your Story validator node is operational.
 
 Additional Information
+
+
+
 Stopping Services
 To stop the Story Geth node and Story Consensus node:
 
