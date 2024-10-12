@@ -83,10 +83,21 @@
         enabled: yes
         state: started
 
+    - name: Create Grafana dashboards directory
+      file:
+        path: /var/lib/grafana/dashboards
+        state: directory
+        mode: '0755'
+        owner: grafana
+        group: grafana
+
     - name: Copy Grafana dashboard JSON file
       copy:
         src: templates/dashboard_story.json
         dest: /var/lib/grafana/dashboards/dashboard_story.json
+        owner: grafana
+        group: grafana
+        mode: '0644'
 
     - name: Configure Grafana dashboard provisioning
       template:
