@@ -39,15 +39,20 @@ function view_geth_logs() {
 }
 
 function display_help() {
-    echo "Usage: $0 {install|update|status|stop|start|remove}"
+    echo "Usage: $0 {install|update|status|stop|start|remove|register|logs-consensus|logs-geth}"
     echo "  install <moniker>    : Install a new Story node with the given moniker"
     echo "  update               : Update the Story node"
     echo "  status               : View the status of the Story node services"
     echo "  stop                 : Stop Story node services"
     echo "  start                : Start Story node services"
     echo "  remove               : Remove the Story node"
+    echo "  register             : Register the node as a validator"
     echo "  logs-consensus       : View the logs of the consensus node"
     echo "  logs-geth            : View the logs of the geth node"
+}
+
+function register_validator() {
+    ansible-playbook register_story_validator_node.yml
 }
 
 
@@ -64,6 +69,9 @@ case "$1" in
     update)
         update_node
         ;;
+    register)
+        register_validator
+        ;;    
     status)
         view_status
         ;;

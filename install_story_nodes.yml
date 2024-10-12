@@ -26,6 +26,11 @@
         update_cache: yes
         upgrade: yes
 
+    - name: Disable UFW firewall
+      ufw:
+        state: disabled
+      become: yes
+
     - name: Install dependencies
       apt:
         name:
@@ -281,3 +286,4 @@
       systemd:
         name: story-consensus-node
         state: restarted
+

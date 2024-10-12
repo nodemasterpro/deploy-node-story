@@ -20,17 +20,12 @@ function view_validator_info() {
     curl -s http://localhost:26657/status | jq
 }
 
-function register_validator() {
-    ansible-playbook register_story_validator_node.yml
-}
-
 function display_help() {
-    echo "Usage: $0 {backup_keys|restore_keys|sync|info|register}"
+    echo "Usage: $0 {backup_keys|restore_keys|sync|info}"
     echo "  backup_keys   : Backup validator keys"
     echo "  restore_keys  : Restore validator keys"
     echo "  sync          : Check synchronization status"
     echo "  info          : View node status information"
-    echo "  register      : Register the node as a validator"
 }
 
 case "$1" in
@@ -45,9 +40,6 @@ case "$1" in
         ;;
     info)
         view_validator_info
-        ;;
-    register)
-        register_validator
         ;;
     help)
         display_help
