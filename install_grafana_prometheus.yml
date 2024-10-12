@@ -1,13 +1,11 @@
 ---
-- name: Install and Configure Grafana, Prometheus, and Cosmos Validators Exporter
+- name: Install and Configure Grafana and Prometheus
   hosts: all
   become: true
 
   vars:
     grafana_version: "8.4.5"
     prometheus_version: "2.37.0"
-    node_exporter_version: "1.3.1"
-    cosmos_exporter_version: "0.3.0"
 
   tasks:
     - name: Install dependencies
@@ -49,22 +47,10 @@
         dest: /usr/local/prometheus
         state: link
 
-    - name: Download and install Node Exporter
-      unarchive:
-        src: https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz
-        dest: /usr/local
-        remote_src: yes
-        creates: /usr/local/node_exporter-{{ node_exporter_version }}.linux-amd64
-
     - name: Create Prometheus systemd service
       template:
         src: prometheus.service.j2
         dest: /etc/systemd/system/prometheus.service
-
-    - name: Create Node Exporter systemd service
-      template:
-        src: node_exporter.service.j2
-        dest: /etc/systemd/system/node_exporter.service
 
     - name: Configure Prometheus
       template:
@@ -91,78 +77,16 @@
         enabled: yes
         state: started
 
-    - name: Enable and start Node Exporter
-      systemd:
-        name: node_exporter
-        enabled: yes
-        state: started
-
     - name: Enable and start Grafana
       systemd:
         name: grafana-server
         enabled: yes
         state: started
-    
-    
-    - name: Create Node Exporter symlink
-      file:
-        src: /usr/local/node_exporter-{{ node_exporter_version }}.linux-amd64
-        dest: /usr/local/node_exporter
-        state: link
-
-    - name: Download Cosmos Exporter
-      get_url:
-        url: "https://github.com/solarlabsteam/cosmos-exporter/releases/download/v{{ cosmos_exporter_version }}/cosmos-exporter_{{ cosmos_exporter_version }}_Linux_x86_64.tar.gz"
-        dest: /tmp/cosmos-exporter.tar.gz
-
-    - name: Extract Cosmos Exporter
-      unarchive:
-        src: /tmp/cosmos-exporter.tar.gz
-        dest: /usr/local/bin
-        remote_src: yes
-
-    - name: Create configuration directory for Cosmos Exporter
-      file:
-        path: /etc/cosmos-exporter
-        state: directory
-        owner: root
-        group: root
-        mode: '0755'
-
-    - name: Create configuration file for Cosmos Exporter
-      template:
-        src: config.toml.j2
-        dest: /etc/cosmos-exporter/config.toml
-
-    - name: Create systemd service for Cosmos Exporter
-      template:
-        src: cosmos-exporter.service.j2
-        dest: /etc/systemd/system/cosmos-exporter.service
-
-    - name: Reload systemd to apply changes
-      systemd:
-        daemon_reload: yes
-
-    - name: Enable and start Cosmos Exporter service
-      systemd:
-        name: cosmos-exporter
-        enabled: yes
-        state: started
-
-    - name: Configure Prometheus to scrape Cosmos Exporter
-      template:
-        src: prometheus.yml.j2
-        dest: /usr/local/prometheus/prometheus.yml
-
-    - name: Restart Prometheus to apply new configuration
-      systemd:
-        name: prometheus
-        state: restarted
 
     - name: Copy Grafana dashboard JSON file
       copy:
-        src: templates/18825_rev6.json
-        dest: /var/lib/grafana/dashboards/cosmos-chain-validator.json
+        src: templates/dashboard_story.json
+        dest: /var/lib/grafana/dashboards/dashboard_story.json
 
     - name: Configure Grafana dashboard provisioning
       template:

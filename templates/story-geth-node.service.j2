@@ -5,7 +5,7 @@ After=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/local/bin/geth --iliad --syncmode full
+ExecStart=/usr/local/bin/geth --iliad --syncmode full --metrics --metrics.addr 127.0.0.1 --metrics.port 6060 --metrics.prometheus
 Restart=always
 RestartSec=3
 LimitNOFILE=4096

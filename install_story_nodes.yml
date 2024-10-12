@@ -270,3 +270,14 @@
       debug:
         msg: "The EVM private key is saved at: {{ home_dir }}/.story/story/config/private_key.txt"
 
+    - name: Enable Prometheus in Story config
+      lineinfile:
+        path: "{{ home_dir }}/.story/story/config/config.toml"
+        regexp: '^prometheus\s*=\s*false'
+        line: 'prometheus = true'
+        backup: yes
+
+    - name: Restart story-consensus-node service
+      systemd:
+        name: story-consensus-node
+        state: restarted
