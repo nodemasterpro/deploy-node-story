@@ -3,6 +3,9 @@
 function backup_keys() {
     ansible-playbook backup_restore_keys.yml -e "action=backup"
     echo "Backup created at /root/backup-keys-story/story_keys_backup.tar.gz"
+    echo "This backup contains:"
+    echo "  - EVM private key (from /root/.story/story/config/private_key.txt)"
+    echo "  - Tendermint validator key (from /root/.story/story/config/priv_validator_key.json)"
 }
 
 function restore_keys() {

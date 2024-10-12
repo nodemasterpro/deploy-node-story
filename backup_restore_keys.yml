@@ -33,6 +33,13 @@
               - "{{ backup_dir }}/priv_validator_key.json"
             dest: "{{ backup_dir }}/story_keys_backup.tar.gz"
             format: gz
+        - name: Display backup information
+          debug:
+            msg: 
+              - "Backup created at {{ backup_dir }}/story_keys_backup.tar.gz"
+              - "This backup contains:"
+              - "  - EVM private key (from /root/.story/story/config/private_key.txt)"
+              - "  - Tendermint validator key (from /root/.story/story/config/priv_validator_key.json)"
       when: action == "backup"
 
     - name: Restore keys
