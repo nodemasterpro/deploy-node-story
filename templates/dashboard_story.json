@@ -26,8 +26,8 @@
   "fiscalYearStartMonth": 0,
   "gnetId": 17100,
   "graphTooltip": 1,
-  "id": 15,
-  "iteration": 1728697180686,
+  "id": 2,
+  "iteration": 1728765181931,
   "links": [],
   "liveNow": true,
   "panels": [
@@ -944,7 +944,7 @@
       },
       "id": 2,
       "panels": [],
-      "title": "cometbft",
+      "title": "Cometbft",
       "type": "row"
     },
     {
@@ -2063,18 +2063,22 @@
       "type": "timeseries"
     },
     {
-      "description": "Difference in seconds between the proposal timestamp and the timestamp of the latest prevote that achieved a quorum in the prevote step",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "PBFA97CFB590B2093"
+      },
+      "description": "Sum of blockparts transmitted by peer in 5m timeframe",
       "fieldConfig": {
         "defaults": {
           "color": {
             "mode": "palette-classic"
           },
           "custom": {
-            "axisLabel": "",
+            "axisLabel": "Bandwidth",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 25,
+            "fillOpacity": 3,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -2082,12 +2086,15 @@
               "viz": false
             },
             "lineInterpolation": "linear",
+            "lineStyle": {
+              "fill": "solid"
+            },
             "lineWidth": 1,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "auto",
+            "showPoints": "never",
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2111,7 +2118,7 @@
               }
             ]
           },
-          "unit": "s"
+          "unit": "decbytes"
         },
         "overrides": []
       },
@@ -2121,22 +2128,19 @@
         "x": 0,
         "y": 68
       },
-      "id": 31,
+      "id": 34,
       "options": {
         "legend": {
-          "calcs": [
-            "last"
-          ],
+          "calcs": [],
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": true
+          "showLegend": false
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "multi",
+          "sort": "desc"
         }
       },
-      "pluginVersion": "9.1.6",
       "targets": [
         {
           "datasource": {
@@ -2144,15 +2148,13 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "exemplar": true,
-          "expr": "cometbft_consensus_quorum_prevote_delay{instance=\"$instance\"}",
-          "interval": "",
-          "legendFormat": "consensus_quorum_prevote_message_delay",
+          "expr": "sum by (peer_id) (rate(cometbft_consensus_block_parts{instance=\"$instance\"}[5m]))",
+          "legendFormat": "peer {{peer_id}}",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Prevote Message Delay",
+      "title": "Consensus Block Parts",
       "transparent": true,
       "type": "timeseries"
     },
@@ -2250,38 +2252,31 @@
       "type": "timeseries"
     },
     {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "PBFA97CFB590B2093"
-      },
-      "description": "Sum of blockparts transmitted by peer in 5m timeframe",
+      "description": "Number of transactions rechecked in the mempool",
       "fieldConfig": {
         "defaults": {
           "color": {
-            "mode": "palette-classic"
+            "mode": "continuous-GrYlRd"
           },
           "custom": {
-            "axisLabel": "Bandwidth",
+            "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 3,
-            "gradientMode": "none",
+            "fillOpacity": 20,
+            "gradientMode": "scheme",
             "hideFrom": {
               "legend": false,
               "tooltip": false,
               "viz": false
             },
-            "lineInterpolation": "linear",
-            "lineStyle": {
-              "fill": "solid"
-            },
-            "lineWidth": 1,
+            "lineInterpolation": "smooth",
+            "lineWidth": 3,
             "pointSize": 5,
             "scaleDistribution": {
               "type": "linear"
             },
-            "showPoints": "never",
+            "showPoints": "auto",
             "spanNulls": false,
             "stacking": {
               "group": "A",
@@ -2304,30 +2299,32 @@
                 "value": 80
               }
             ]
-          },
-          "unit": "decbytes"
+          }
         },
         "overrides": []
       },
       "gridPos": {
         "h": 8,
         "w": 12,
-        "x": 0,
+        "x": 12,
         "y": 76
       },
-      "id": 34,
+      "id": 60,
       "options": {
         "legend": {
-          "calcs": [],
+          "calcs": [
+            "last"
+          ],
           "displayMode": "list",
           "placement": "bottom",
-          "showLegend": false
+          "showLegend": true
         },
         "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
+          "mode": "single",
+          "sort": "none"
         }
       },
+      "pluginVersion": "9.1.6",
       "targets": [
         {
           "datasource": {
@@ -2335,13 +2332,15 @@
             "uid": "PBFA97CFB590B2093"
           },
           "editorMode": "code",
-          "expr": "sum by (peer_id) (rate(cometbft_consensus_block_parts{instance=\"$instance\"}[5m]))",
-          "legendFormat": "peer {{peer_id}}",
+          "exemplar": true,
+          "expr": "cometbft_consensus_height{instance=\"$instance\"}",
+          "interval": "",
+          "legendFormat": "Cometbft Consensus Height",
           "range": true,
           "refId": "A"
         }
       ],
-      "title": "Consensus Block Parts",
+      "title": "Consensus Height",
       "transparent": true,
       "type": "timeseries"
     }
@@ -2434,8 +2433,8 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "Node Monitoring Story",
-  "uid": "B_fkqziHz",
-  "version": 2,
+  "title": "Node Monitoring Story 2",
+  "uid": "B_fkqziHz1",
+  "version": 1,
   "weekStart": ""
 }
