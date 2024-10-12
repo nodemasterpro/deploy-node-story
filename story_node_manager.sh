@@ -30,6 +30,14 @@ function remove_node() {
     ansible-playbook remove_story_nodes.yml
 }
 
+function view_consensus_logs() {
+    journalctl -u story-consensus-node -f -o cat
+}
+
+function view_geth_logs() {
+    journalctl -u story-geth-node -f -o cat
+}
+
 function display_help() {
     echo "Usage: $0 {install|update|status|stop|start|remove}"
     echo "  install <moniker>    : Install a new Story node with the given moniker"
@@ -38,7 +46,11 @@ function display_help() {
     echo "  stop                 : Stop Story node services"
     echo "  start                : Start Story node services"
     echo "  remove               : Remove the Story node"
+    echo "  logs-consensus       : View the logs of the consensus node"
+    echo "  logs-geth            : View the logs of the geth node"
 }
+
+
 
 case "$1" in
     install)
@@ -61,6 +73,12 @@ case "$1" in
     start)
         start_services
         ;;
+    logs-consensus)
+        view_consensus_logs
+        ;;
+    logs-geth)
+        view_geth_logs
+        ;;    
     remove)
         read -p "Are you sure you want to remove the Story node? This action cannot be undone. (y/N) " confirm
         if [[ $confirm == [yY] || $confirm == [yY][eE][sS] ]]; then
