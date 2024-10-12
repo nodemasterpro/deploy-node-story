@@ -2,6 +2,7 @@
 
 function backup_keys() {
     ansible-playbook backup_restore_keys.yml -e "action=backup"
+    echo "Backup created at /root/backup-keys-story/story_keys_backup.tar.gz"
 }
 
 function restore_keys() {
@@ -9,11 +10,11 @@ function restore_keys() {
 }
 
 function check_sync_status() {
-    story status 2>&1 | jq '.SyncInfo'
+    story status | jq '.sync_info'
 }
 
 function view_validator_info() {
-    story query staking validator $(story keys show validator -a --bech val) --node https://rpc.story-testnet-1.storyprotocol.xyz:443
+    curl -s http://localhost:26657/status | jq
 }
 
 function register_validator() {
@@ -25,7 +26,7 @@ function display_help() {
     echo "  backup_keys   : Backup validator keys"
     echo "  restore_keys  : Restore validator keys"
     echo "  sync          : Check synchronization status"
-    echo "  info          : View validator information"
+    echo "  info          : View node status information"
     echo "  register      : Register the node as a validator"
 }
 
