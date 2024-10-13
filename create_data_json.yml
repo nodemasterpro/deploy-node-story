@@ -35,7 +35,7 @@
 
     - name: Pause to allow fork to complete
       pause:
-        seconds: 30
+        seconds: 15
 
     - name: Wait for fork to be available
       uri:
@@ -45,15 +45,9 @@
           Authorization: "token {{ github_token }}"
           Accept: "application/vnd.github.v3+json"
       register: fork_status
-      retries: 20
-      delay: 15
+      retries: 10
+      delay: 10
       until: fork_status.status == 200
-      ignore_errors: yes
-
-    - name: Check if fork is available
-      fail:
-        msg: "Failed to create fork. Please check your GitHub username and token, then try again."
-      when: fork_status.status != 200
 
     - name: Clone the forked Git repository into /root
       git:
