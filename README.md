@@ -173,3 +173,44 @@ This playbook will:
 4. Provide instructions for creating a pull request
 
 Follow the instructions provided by the playbook to complete the submission process.
+
+### Snapshot Management
+
+The `snapshot_manager.sh` script provides functionality to manage Story node snapshots:
+
+1. To download a snapshot:
+   ```
+   ./snapshot_manager.sh download <type>
+   ```
+
+2. To import a snapshot:
+   ```
+   ./snapshot_manager.sh import <type>
+   ```
+
+Where `<type>` can be either 'pruned' or 'archive'.
+
+These commands allow you to quickly synchronize your node using the latest available snapshot, which is much faster than syncing from scratch.
+
+### Submitting MD Files for Story Validators Race
+
+In addition to the data.json file, you need to submit several MD files detailing your validator setup and tasks completed. These files are:
+
+- submission-general-task-1.md
+- submission-general-task-2.md
+- submission-general-task-3.md
+- submission-general-task-4.md
+- submission-bonus-task-1.md
+- submission-bonus-task-2.md
+- submission-bonus-task-3.md
+
+These files should be placed in the same directory as your data.json file. The `create_data_json.yml` playbook has been updated to automatically copy these files from your local `deploy-node-story` directory to your forked repository.
+
+To ensure your MD files are included in your submission:
+
+1. Create and edit the MD files in your local `deploy-node-story` directory.
+2. Run the `create_data_json.yml` playbook as described above.
+3. The playbook will copy your MD files to the correct location in your forked repository.
+4. Follow the instructions provided by the playbook to create a pull request.
+
+Your pull request will now include both your data.json file and all the required MD files for the Story Validators Race.

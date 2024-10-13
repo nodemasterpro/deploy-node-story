@@ -89,10 +89,29 @@
       args:
         chdir: "{{ repo_dir.stdout }}"
 
+    - name: Copy MD files to submission directory
+      copy:
+        src: "/root/deploy-node-story/{{ item }}"
+        dest: "/root/story-validators-race/wave-2/submissions/{{ validator_moniker }}/"
+      loop:
+        - submission-general-task-1.md
+        - submission-general-task-2.md
+        - submission-general-task-3.md
+        - submission-general-task-4.md
+        - submission-bonus-task-1.md
+        - submission-bonus-task-2.md
+        - submission-bonus-task-3.md
+
+    - name: Add MD files to Git
+      command: "git add wave-2/submissions/{{ validator_moniker }}/*.md"
+      args:
+        chdir: "{{ repo_dir.stdout }}"
+
     - name: Display PR creation instructions
       debug:
         msg: |
           The changes have been pushed to your forked repository. Please create a Pull Request:
           1. Go to https://github.com/{{ github_username }}/story-validators-race
           2. You will see a prompt to create a Pull Request for the branch 'main'.
-          3. Set the base repository to 'stakeme-team/story-validators-race' and the title to 'Information file {{ validator_moniker }}'.
+          3. Set the base repository to 'stakeme-team/story-validators-race' and the title to 'Submission for {{ validator_moniker }}'.
+          4. In the PR description, mention that you're submitting both the data.json and the MD files for the Story Validators Race.
