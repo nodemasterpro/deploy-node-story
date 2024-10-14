@@ -26,15 +26,3 @@ The video covers the following key aspects:
    - Editing validator description on the Story Protocol explorer
    - Creating and submitting required files for the challenge
 
-## Video Impact
-
-This comprehensive video guide serves multiple purposes:
-
-1. Provides a visual, step-by-step tutorial for setting up and managing a Story validator node
-2. Demonstrates the practical application of the written guide, making it easier for viewers to follow along
-3. Offers insights into potential challenges and their solutions during the setup process
-4. Encourages participation in the Story Validators Race Wave-2 Challenge by showing the entire process
-5. Contributes to the growth of the Story Protocol community by providing accessible, detailed instructions
-
-By creating and publishing this video, I've contributed to the Story Protocol ecosystem by offering a visual learning resource, complementing the written guide, and potentially helping more validators join the network.
-
