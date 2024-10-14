@@ -21,8 +21,7 @@ function display_help() {
     echo "  <type> can be 'pruned' or 'archive'"
 }
 
-if [ $# -ne 2 ]; then
-    echo "Error: Both action and snapshot type are required."
+if [ $# -eq 0 ] || [ $# -ne 2 ]; then
     display_help
     exit 1
 fi
