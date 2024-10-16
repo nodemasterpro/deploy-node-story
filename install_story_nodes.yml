@@ -122,6 +122,31 @@
         return_content: yes
       register: snapshot_page
 
+    - name: Create story-consensus-node service
+      template:
+        src: templates/story-consensus-node.service.j2
+        dest: /etc/systemd/system/story-consensus-node.service
+        mode: '0644'
+
+    - name: Create story-geth-node service
+      template:
+        src: templates/story-geth-node.service.j2
+        dest: /etc/systemd/system/story-geth-node.service
+        mode: '0644'
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Ensure services are stopped
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: yes
+      loop:
+        - story-consensus-node
+        - story-geth-node
+        
     - name: Extract all snapshot filenames
       set_fact:
         story_snapshots: "{{ snapshot_page.content | regex_findall('story_\\d{4}-\\d{2}-\\d{2}_\\d+_snap\\.tar\\.lz4') }}"
@@ -149,14 +174,6 @@
         dest: "{{ home_dir }}/.story/story/priv_validator_state.json.backup"
         remote_src: yes
       when: priv_validator_state.stat.exists
-
-    - name: Stop story-consensus-node and story-geth-node services
-      systemd:
-        name: "{{ item }}"
-        state: stopped
-      loop:
-        - story-consensus-node
-        - story-geth-node
 
     - name: Remove old Story data
       file:
@@ -234,31 +251,7 @@
         url: "{{ ADDRBOOK_URL }}"
         dest: "{{ ADDRBOOK_FILE }}"    
     
-    - name: Create story-consensus-node service
-      template:
-        src: templates/story-consensus-node.service.j2
-        dest: /etc/systemd/system/story-consensus-node.service
-        mode: '0644'
-
-    - name: Create story-geth-node service
-      template:
-        src: templates/story-geth-node.service.j2
-        dest: /etc/systemd/system/story-geth-node.service
-        mode: '0644'
-
-    - name: Reload systemd daemon
-      systemd:
-        daemon_reload: yes
-
-    - name: Ensure services are stopped
-      systemd:
-        name: "{{ item }}"
-        state: stopped
-        enabled: yes
-      loop:
-        - story-consensus-node
-        - story-geth-node
-
+    
     - name: Clean up downloaded tar.gz files
       file:
         path: "{{ item }}"
@@ -282,8 +275,4 @@
         line: 'prometheus = true'
         backup: yes
 
-    - name: Restart story-consensus-node service
-      systemd:
-        name: story-consensus-node
-        state: restarted
-
+    
