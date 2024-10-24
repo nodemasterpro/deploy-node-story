@@ -5,7 +5,7 @@
 
   vars:
     GO_VERSION: "1.23.0"
-    geth_version: "0.9.3-b224fdf"
+    geth_version: "0.9.4"
     story_version: "0.11.0-aac4bfe"
     home_dir: "/root"
     APP_HOME: "/root/.story"
@@ -92,11 +92,10 @@
       when: go_version_check.rc != 0 or GO_VERSION not in go_version_check.stdout
 
     - name: Download and install story-geth
-      shell: |
-        wget https://story-geth-binaries.s3.us-west-1.amazonaws.com/geth-public/geth-linux-amd64-{{ geth_version }}.tar.gz
-        tar -xvf geth-linux-amd64-{{ geth_version }}.tar.gz
-        sudo mv geth-linux-amd64-{{ geth_version }}/geth /usr/local/bin/
-        sudo chmod +x /usr/local/bin/geth
+      get_url:
+        url: "https://github.com/piplabs/story-geth/releases/download/v{{ geth_version }}/geth-linux-amd64"
+        dest: "/usr/local/bin/geth"
+        mode: '0755'
 
     - name: Download and install story
       shell: |

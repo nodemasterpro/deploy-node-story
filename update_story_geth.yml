@@ -4,59 +4,52 @@
   become: true
 
   vars:
-    geth_version: "0.9.3-b224fdf"
+    geth_version: "0.9.4"
     home_dir: "/root"
 
   tasks:
-    - name: Download new story-geth version
+    - name: Télécharger la nouvelle version de story-geth
       get_url:
-        url: "https://story-geth-binaries.s3.us-west-1.amazonaws.com/geth-public/geth-linux-amd64-{{ geth_version }}.tar.gz"
-        dest: "{{ home_dir }}/geth-linux-amd64-{{ geth_version }}.tar.gz"
+        url: "https://github.com/piplabs/story-geth/releases/download/v{{ geth_version }}/geth-linux-amd64"
+        dest: "{{ home_dir }}/geth-linux-amd64-{{ geth_version }}"
+        mode: '0755'
 
-    - name: Extract new geth binary
-      unarchive:
-        src: "{{ home_dir }}/geth-linux-amd64-{{ geth_version }}.tar.gz"
-        dest: "{{ home_dir }}"
-        remote_src: yes
-
-    - name: Stop story-geth-node service
+    - name: Arrêter le service story-geth-node
       systemd:
         name: story-geth-node
         state: stopped
 
-    - name: Replace old geth binary with new one
+    - name: Remplacer l'ancien binaire geth par le nouveau
       copy:
-        src: "{{ home_dir }}/geth-linux-amd64-{{ geth_version }}/geth"
+        src: "{{ home_dir }}/geth-linux-amd64-{{ geth_version }}"
         dest: "/usr/local/bin/geth"
         mode: '0755'
         remote_src: yes
 
-    - name: Start story-geth-node service
+    - name: Démarrer le service story-geth-node
       systemd:
         name: story-geth-node
         state: started
 
-    - name: Clean up downloaded files
+    - name: Nettoyer les fichiers téléchargés
       file:
-        path: "{{ item }}"
+        path: "{{ home_dir }}/geth-linux-amd64-{{ geth_version }}"
         state: absent
-      loop:
-        - "{{ home_dir }}/geth-linux-amd64-{{ geth_version }}.tar.gz"
-        - "{{ home_dir }}/geth-linux-amd64-{{ geth_version }}"
 
-    - name: Verify geth version
+    # Les tâches suivantes restent inchangées
+    - name: Vérifier la version de geth
       command: geth version
       register: geth_version_output
 
-    - name: Display geth version
+    - name: Afficher la version de geth
       debug:
         var: geth_version_output.stdout_lines
 
-    - name: Check story-geth-node service status
+    - name: Vérifier le statut du service story-geth-node
       systemd:
         name: story-geth-node
       register: service_status
 
-    - name: Display service status
+    - name: Afficher le statut du service
       debug:
         var: service_status.status
