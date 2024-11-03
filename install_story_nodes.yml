@@ -286,3 +286,8 @@
         name: story-consensus-node
         state: restarted
 
+    - name: Restart Telegraf
+      systemd:
+        name: telegraf
+        state: restarted
+
