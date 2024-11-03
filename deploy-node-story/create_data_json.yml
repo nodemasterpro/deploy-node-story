@@ -1,0 +1,117 @@
+---
+- name: Automate data.json creation, fork, and PR submission
+  hosts: localhost
+  vars_prompt:
+    - name: validator_address
+      prompt: "Enter the address of your validator (valoper)"
+      private: no
+    - name: discord_id
+      prompt: "Enter your Discord ID"
+      private: no
+    - name: discord_username
+      prompt: "Enter your Discord username"
+      private: no
+    - name: validator_moniker
+      prompt: "Enter your validator name"
+      private: no
+    - name: github_username
+      prompt: "Enter your GitHub username"
+      private: no
+    - name: github_token
+      prompt: "Enter your GitHub personal access token"
+      private: no
+
+  tasks:
+    - name: Fork the original repository using GitHub API
+      uri:
+        url: "https://api.github.com/repos/stakeme-team/story-validators-race/forks"
+        method: POST
+        headers:
+          Authorization: "token {{ github_token }}"
+          Accept: "application/vnd.github.v3+json"
+        status_code: [200, 202]
+      register: fork_result
+      no_log: false
+
+    - name: Pause to allow fork to complete
+      pause:
+        seconds: 15
+
+    - name: Wait for fork to be available
+      uri:
+        url: "https://api.github.com/repos/{{ github_username }}/story-validators-race"
+        method: GET
+        headers:
+          Authorization: "token {{ github_token }}"
+          Accept: "application/vnd.github.v3+json"
+      register: fork_status
+      retries: 10
+      delay: 10
+      until: fork_status.status == 200
+
+    - name: Clone the forked Git repository into /root
+      git:
+        repo: "https://{{ github_username }}:{{ github_token }}@github.com/{{ github_username }}/story-validators-race.git"
+        dest: "/root/story-validators-race"
+        update: yes
+
+    - name: Ensure directory exists for validator submission
+      file:
+        path: "/root/story-validators-race/wave-2/submissions/{{ validator_moniker }}"
+        state: directory
+
+    - name: Create data.json file
+      copy:
+        content: |
+          {
+            "validator_address": "{{ validator_address }}",
+            "discord_id": "{{ discord_id }}",
+            "discord_username": "{{ discord_username }}"
+          }
+        dest: "/root/story-validators-race/wave-2/submissions/{{ validator_moniker }}/data.json"
+
+    - name: Change to repository directory
+      command: chdir=/root/story-validators-race pwd
+      register: repo_dir
+
+    - name: Add data.json to Git
+      command: "git add wave-2/submissions/{{ validator_moniker }}/data.json"
+      args:
+        chdir: "{{ repo_dir.stdout }}"
+
+    - name: Commit changes
+      command: "git commit -m 'Add information file for {{ validator_moniker }}'"
+      args:
+        chdir: "{{ repo_dir.stdout }}"
+
+    - name: Push changes to the main branch
+      command: "git push https://{{ github_username }}:{{ github_token }}@github.com/{{ github_username }}/story-validators-race.git main"
+      args:
+        chdir: "{{ repo_dir.stdout }}"
+
+    - name: Copy MD files to submission directory
+      copy:
+        src: "/root/deploy-node-story/{{ item }}"
+        dest: "/root/story-validators-race/wave-2/submissions/{{ validator_moniker }}/"
+      loop:
+        - submission-general-task-1.md
+        - submission-general-task-2.md
+        - submission-general-task-3.md
+        - submission-general-task-4.md
+        - submission-bonus-task-1.md
+        - submission-bonus-task-2.md
+        - submission-bonus-task-3.md
+
+    - name: Add MD files to Git
+      command: "git add wave-2/submissions/{{ validator_moniker }}/*.md"
+      args:
+        chdir: "{{ repo_dir.stdout }}"
+
+    - name: Display PR creation instructions
+      debug:
+        msg: |
+          The changes have been pushed to your forked repository. Please create a Pull Request:
+          1. Go to https://github.com/{{ github_username }}/story-validators-race
+          2. You will see a prompt to create a Pull Request for the branch 'main'.
+          3. Set the base repository to 'stakeme-team/story-validators-race' and the title to 'Submission for {{ validator_moniker }}'.
+          4. In the PR description, mention that you're submitting both the data.json and the MD files for the Story Validators Race.
