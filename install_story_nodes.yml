@@ -2,34 +2,101 @@
 - name: Install Story Protocol Validator Node
   hosts: all
   become: true
+  gather_facts: true
 
   vars:
-    GO_VERSION: "1.23.0"
-    geth_version: "0.9.4"
-    story_version: "0.11.0-aac4bfe"
+    GO_VERSION: "1.22.3"
+    geth_version: "0.10.0"
+    story_version: "0.12.0"
     home_dir: "/root"
     APP_HOME: "/root/.story"
     ADDRBOOK_URL: "https://server-5.itrocket.net/testnet/story/addrbook.json"
     ADDRBOOK_FILE: "{{ APP_HOME }}/story/config/addrbook.json"
     PEERS_URL: "https://story-testnet-rpc.itrocket.net/net_info"
     SNAPSHOT_BASE_URL: "https://server-3.itrocket.net/testnet/story/"
-    
- 
+    STORY_CHAIN_ID: "odyssey"
+    STORY_PORT: "22"
+    WALLET_BACKUP_DIR: "/root/wallets-story-backup"
+
   vars_prompt:
     - name: moniker
       prompt: "Enter the moniker for the node"
-      private: false  
+      private: false
 
   tasks:
+    - name: Display initial progress
+      debug:
+        msg: "Starting Story node installation. Progress: 5%"
+
+    - name: Technical prerequisites analysis
+      block:
+        - name: Check for existing installation
+          stat:
+            path: "{{ APP_HOME }}"
+          register: existing_installation
+
+        - name: Stop Story services if running
+          systemd:
+            name: "{{ item }}"
+            state: stopped
+          loop:
+            - story-consensus-node
+            - story-geth-node
+          ignore_errors: yes
+          when: existing_installation.stat.exists
+
+        - name: Backup existing configuration if present
+          block:
+            - name: Create backup directory
+              file:
+                path: "{{ WALLET_BACKUP_DIR }}"
+                state: directory
+                mode: '0700'
+
+            - name: Backup key files
+              copy:
+                src: "{{ item }}"
+                dest: "{{ WALLET_BACKUP_DIR }}/"
+                remote_src: yes
+              with_items:
+                - "{{ APP_HOME }}/story/config/private_key.txt"
+                - "{{ APP_HOME }}/story/config/priv_validator_key.json"
+                - "{{ APP_HOME }}/story/data/priv_validator_state.json"
+              ignore_errors: yes
+
+            - name: Create backup manifest
+              copy:
+                content: "{{ ansible_date_time.iso8601 }}"
+                dest: "{{ WALLET_BACKUP_DIR }}/backup_timestamp"
+
+            - name: Display backup message
+              debug:
+                msg: "Configuration backed up to {{ WALLET_BACKUP_DIR }}"
+          when: existing_installation.stat.exists
+
+        - name: Remove existing installation
+          file:
+            path: "{{ APP_HOME }}"
+            state: absent
+          when: existing_installation.stat.exists
+
+        - name: Display removal message
+          debug:
+            msg: "Existing installation removed. Keys backed up to {{ WALLET_BACKUP_DIR }} if they existed."
+          when: existing_installation.stat.exists
+
+    - name: Display progress after prerequisites
+      debug:
+        msg: "Progress: 15% - Prerequisites checked"
+
     - name: Update system
       apt:
         update_cache: yes
         upgrade: yes
 
-    - name: Disable UFW firewall
-      ufw:
-        state: disabled
-      become: yes
+    - name: Display progress after system update
+      debug:
+        msg: "Progress: 15% - System updated"
 
     - name: Install dependencies
       apt:
@@ -42,6 +109,10 @@
           - lz4
           - pv
         state: present
+
+    - name: Display progress after dependencies installation
+      debug:
+        msg: "Progress: 25% - Dependencies installed"
 
     - name: Check Go version
       shell: go version
@@ -91,18 +162,25 @@
             
       when: go_version_check.rc != 0 or GO_VERSION not in go_version_check.stdout
 
+    - name: Display progress after Go installation
+      debug:
+        msg: "Progress: 35% - Go installed"
+
     - name: Download and install story-geth
       get_url:
         url: "https://github.com/piplabs/story-geth/releases/download/v{{ geth_version }}/geth-linux-amd64"
         dest: "/usr/local/bin/geth"
         mode: '0755'
 
-    - name: Download and install story
-      shell: |
-        wget https://story-geth-binaries.s3.us-west-1.amazonaws.com/story-public/story-linux-amd64-{{ story_version }}.tar.gz
-        tar -xvf story-linux-amd64-{{ story_version }}.tar.gz
-        sudo mv story-linux-amd64-{{ story_version }}/story /usr/local/bin/
-        sudo chmod +x /usr/local/bin/story
+    - name: Download and install story binary
+      get_url:
+        url: "https://github.com/piplabs/story/releases/download/v{{ story_version }}/story-linux-amd64"
+        dest: "/usr/local/bin/story"
+        mode: '0755'
+
+    - name: Display progress after binaries installation
+      debug:
+        msg: "Progress: 45% - Story and Geth binaries installed"
 
     - name: Create data directories
       file:
@@ -113,8 +191,38 @@
         - story
 
     - name: Initialize story node
-      shell: story init --network iliad --moniker "{{ moniker }}"
+      shell: story init --network odyssey --moniker "{{ moniker }}" --force
 
+    - name: Display progress after node initialization
+      debug:
+        msg: "Progress: 55% - Node initialized"
+
+    - name: Create story-consensus-node service
+      template:
+        src: templates/story-consensus-node.service.j2
+        dest: /etc/systemd/system/story-consensus-node.service
+        mode: '0644'
+
+    - name: Create story-geth-node service
+      template:
+        src: templates/story-geth-node.service.j2
+        dest: /etc/systemd/system/story-geth-node.service
+        mode: '0644'
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Ensure services are stopped
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+        enabled: yes
+      loop:
+        - story-consensus-node
+        - story-geth-node
+    
+    
     - name: Get latest snapshot filenames
       uri:
         url: "{{ SNAPSHOT_BASE_URL }}"
@@ -149,35 +257,50 @@
         remote_src: yes
       when: priv_validator_state.stat.exists
 
-    - name: Stop story-consensus-node and story-geth-node services
-      systemd:
-        name: "{{ item }}"
-        state: stopped
-      loop:
-        - story-consensus-node
-        - story-geth-node
-
     - name: Remove old Story data
       file:
         path: "{{ home_dir }}/.story/story/data"
         state: absent
     
     
-    - name: Download Story snapshot
-      shell: "wget -q --show-progress -O /root/{{ story_snapshot_filename }} {{ SNAPSHOT_BASE_URL }}{{ story_snapshot_filename }} --inet4-only"
-      args:
-        chdir: "/root"
-    
-    - name: Extract Story snapshot
+    - name: Download Story snapshot using aria2c
       shell: |
-        lz4 -cd /root/{{ story_snapshot_filename }} | tar -xf - -C {{ home_dir }}/.story/story
+        aria2c -x 16 -s 16 {{ SNAPSHOT_BASE_URL }}{{ story_snapshot_filename }} -d /root/
       args:
         executable: /bin/bash
+      register: download_story_result
+      tags:
+        - snapshot
+
+    - name: Show Story snapshot download result
+      debug:
+        msg: "Story snapshot download completed: {{ download_story_result.rc == 0 }}"
+      tags:
+        - snapshot
+
+    - name: Display progress after snapshot download
+      debug:
+        msg: "Progress: 65% - Snapshots downloaded"
+
+    - name: Extract Story snapshot
+      shell: |
+        lz4 -cd "/root/{{ story_snapshot_filename }}" | tar -xf - -C {{ home_dir }}/.story/story
+      args:
+        executable: /bin/bash
+      register: extract_story_output
+      tags:
+        - snapshot
+
+    - name: Display progress after snapshot extraction
+      debug:
+        msg: "Progress: 75% - Snapshots extracted"
 
     - name: Remove downloaded Story snapshot file
       file:
         path: "/root/{{ story_snapshot_filename }}"
         state: absent
+      tags:
+        - snapshot
 
     - name: Restore priv_validator_state.json if backup exists
       copy:
@@ -198,66 +321,85 @@
         state: absent
 
     
-    - name: Download Geth snapshot
-      shell: "wget -q --show-progress -O /root/{{ geth_snapshot_filename }} {{ SNAPSHOT_BASE_URL }}{{ geth_snapshot_filename }} --inet4-only"
-      args:
-        chdir: "/root"
-     
-    
-    - name: Extract Geth snapshot
+    - name: Download Geth snapshot using aria2c
       shell: |
-        lz4 -cd /root/{{ geth_snapshot_filename }} | tar -xf - -C {{ home_dir }}/.story/geth/iliad/geth
+        aria2c -x 16 -s 16 {{ SNAPSHOT_BASE_URL }}{{ geth_snapshot_filename }} -d /root/
       args:
         executable: /bin/bash
+      register: download_geth_result
+      tags:
+        - snapshot
+
+    - name: Show Geth snapshot download result
+      debug:
+        msg: "Geth snapshot download completed: {{ download_geth_result.rc == 0 }}"
+      tags:
+        - snapshot
+
+    - name: Display progress after snapshot download
+      debug:
+        msg: "Progress: 65% - Snapshots downloaded"
+
+    - name: Extract Geth snapshot
+      shell: |
+        lz4 -cd "/root/{{ geth_snapshot_filename }}" | tar -xf - -C {{ home_dir }}/.story/geth/iliad/geth
+      args:
+        executable: /bin/bash
+      register: extract_geth_output
+      tags:
+        - snapshot
+
+    - name: Display progress after snapshot extraction
+      debug:
+        msg: "Progress: 75% - Snapshots extracted"
 
     - name: Remove downloaded Geth snapshot file
       file:
         path: "/root/{{ geth_snapshot_filename }}"
         state: absent
-
+      tags:
+        - snapshot
     
     - name: Fetch peers
       shell: |
         curl -sS {{ PEERS_URL }} | jq -r '.result.peers[] | "\(.node_info.id)@\(.remote_ip):\(.node_info.listen_addr)"' | awk -F ':' '{print $1":"$(NF)}' | paste -sd, -
       register: peers
 
+    
+    - name: Set custom ports in story.toml
+      replace:
+        path: "{{ APP_HOME }}/story/config/story.toml"
+        regexp: "{{ item.regexp }}"
+        replace: "{{ item.replace }}"
+      with_items:
+        - { regexp: ':1317', replace: ':{{ STORY_PORT }}317' }
+        - { regexp: ':8551', replace: ':{{ STORY_PORT }}551' }
+
+    - name: Set custom ports in config.toml
+      replace:
+        path: "{{ APP_HOME }}/story/config/config.toml"
+        regexp: "{{ item.regexp }}"
+        replace: "{{ item.replace }}"
+      with_items:
+        - { regexp: ':26658', replace: ':{{ STORY_PORT }}658' }
+        - { regexp: ':26657', replace: ':{{ STORY_PORT }}657' }
+        - { regexp: ':26656', replace: ':{{ STORY_PORT }}656' }
+        - { regexp: ':26660', replace: ':{{ STORY_PORT }}660' }
+
+    
     - name: Update config.toml with peers
       lineinfile:
         path: "{{ home_dir }}/.story/story/config/config.toml"
         regexp: '^persistent_peers *=.*'
         line: 'persistent_peers = "{{ peers.stdout }}"'
         backup: yes
-
+    
     - name: Download addrbook.json
       get_url:
         url: "{{ ADDRBOOK_URL }}"
         dest: "{{ ADDRBOOK_FILE }}"    
     
-    - name: Create story-consensus-node service
-      template:
-        src: templates/story-consensus-node.service.j2
-        dest: /etc/systemd/system/story-consensus-node.service
-        mode: '0644'
-
-    - name: Create story-geth-node service
-      template:
-        src: templates/story-geth-node.service.j2
-        dest: /etc/systemd/system/story-geth-node.service
-        mode: '0644'
-
-    - name: Reload systemd daemon
-      systemd:
-        daemon_reload: yes
-
-    - name: Ensure services are stopped
-      systemd:
-        name: "{{ item }}"
-        state: stopped
-        enabled: yes
-      loop:
-        - story-consensus-node
-        - story-geth-node
-
+    
     - name: Clean up downloaded tar.gz files
       file:
         path: "{{ item }}"
@@ -274,20 +416,92 @@
       debug:
         msg: "The EVM private key is saved at: {{ home_dir }}/.story/story/config/private_key.txt"
 
-    - name: Enable Prometheus in Story config
-      lineinfile:
-        path: "{{ home_dir }}/.story/story/config/config.toml"
-        regexp: '^prometheus\s*=\s*false'
-        line: 'prometheus = true'
-        backup: yes
+    - name: Restore keys if backup exists
+      block:
+        - name: Check if backup exists
+          stat:
+            path: "{{ WALLET_BACKUP_DIR }}/private_key.txt"
+          register: backup_exists
 
-    - name: Restart story-consensus-node service
+        - name: Restore key files
+          copy:
+            src: "{{ WALLET_BACKUP_DIR }}/{{ item.src }}"
+            dest: "{{ item.dest }}"
+            mode: '0600'
+          with_items:
+            - { src: 'private_key.txt', dest: '{{ APP_HOME }}/story/config/private_key.txt' }
+            - { src: 'priv_validator_key.json', dest: '{{ APP_HOME }}/story/config/priv_validator_key.json' }
+            - { src: 'priv_validator_state.json', dest: '{{ APP_HOME }}/story/data/priv_validator_state.json' }
+          when: backup_exists.stat.exists
+          ignore_errors: yes
+
+        - name: Display restore message
+          debug:
+            msg: "Keys restored from backup"
+          when: backup_exists.stat.exists
+
+    - name: start story-geth-node service
+      systemd:
+        name: story-geth-node
+        state: started    
+
+    - name: start story-consensus-node service
       systemd:
         name: story-consensus-node
-        state: restarted
+        state: started
+   
+ 
+    - name: Check and restart services if needed
+      block:
+        - name: Check services status
+          service_facts:
 
-    - name: Restart Telegraf
-      systemd:
-        name: telegraf
-        state: restarted
+        - name: Restart story-consensus-node if not active
+          systemd:
+            name: story-consensus-node
+            state: restarted
+          when: ansible_facts.services['story-consensus-node.service'].state != 'running'
+
+        - name: Restart story-geth-node if not active
+          systemd:
+            name: story-geth-node
+            state: restarted
+          when: ansible_facts.services['story-geth-node.service'].state != 'running'
+
+
+        - name: Wait for services to be active
+          wait_for:
+            timeout: 30
+          loop:
+            - "story-consensus-node"
+            - "story-geth-node"
+          register: service_status
+          until: ansible_facts.services[item + '.service'].state == 'running'
+          retries: 3
+          delay: 10
+
+        - name: Check service logs for errors
+          shell: |
+            journalctl -u {{ item }} -n 50 --no-pager | grep -i "error\|failed" || true
+          register: service_logs
+          loop:
+            - story-consensus-node
+            - story-geth-node
+
+
+        - name: Display service errors if present
+          debug:
+            msg: "Errors found in service {{ item.item }}: {{ item.stdout }}"
+          when: item.stdout != ""
+          loop: "{{ service_logs.results }}"
+
+      rescue:
+        - name: Service check failure notification
+          debug:
+            msg: "Service check failed. Please check services status manually."
+
+
+    - name: Display final progress
+      debug:
+        msg: "Progress: 100% - Story node installation completed"
 
