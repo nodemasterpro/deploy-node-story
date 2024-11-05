@@ -4,55 +4,41 @@
   become: true
 
   vars:
-    consensus_version: "0.11.0-aac4bfe"
+    story_version: "0.12.1"
     home_dir: "/root"
 
   tasks:
-    - name: Download new story-consensus version
-      get_url:
-        url: "https://story-geth-binaries.s3.us-west-1.amazonaws.com/story-public/story-linux-amd64-{{ consensus_version }}.tar.gz"
-        dest: "{{ home_dir }}/story-linux-amd64-{{ consensus_version }}.tar.gz"
-
-    - name: Extract new story-consensus binary
-      unarchive:
-        src: "{{ home_dir }}/story-linux-amd64-{{ consensus_version }}.tar.gz"
-        dest: "{{ home_dir }}"
-        remote_src: yes
-
     - name: Stop story-consensus-node service
       systemd:
         name: story-consensus-node
         state: stopped
 
-    - name: Replace old story-consensus binary with new one
-      copy:
-        src: "{{ home_dir }}/story-linux-amd64-{{ consensus_version }}/story"
+    - name: Stop story-geth-node service
+      systemd:
+        name: story-geth-node
+        state: stopped
+
+    - name: Remove existing story binary
+      file:
+        path: "/usr/local/bin/story"
+        state: absent
+
+    - name: Download and install story binary
+      get_url:
+        url: "https://github.com/piplabs/story/releases/download/v{{ story_version }}/story-linux-amd64"
         dest: "/usr/local/bin/story"
         mode: '0755'
-        remote_src: yes
+        force: yes
+
+    - name: Start story-geth-node service
+      systemd:
+        name: story-geth-node
+        state: started
 
     - name: Start story-consensus-node service
       systemd:
         name: story-consensus-node
         state: started
-
-    - name: Clean up downloaded files
-      file:
-        path: "{{ item }}"
-        state: absent
-      loop:
-        - "{{ home_dir }}/story-linux-amd64-{{ consensus_version }}.tar.gz"
-        - "{{ home_dir }}/story-linux-amd64-{{ consensus_version }}"
-
-    - name: Restart story-geth-node service
-      systemd:
-        name: story-geth-node
-        state: restarted
-
-    - name: Restart story-consensus-node service
-      systemd:
-        name: story-consensus-node
-        state: restarted
 
     - name: Check story-consensus-node service status
       systemd:

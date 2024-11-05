@@ -7,7 +7,7 @@
   vars:
     GO_VERSION: "1.22.3"
     geth_version: "0.10.0"
-    story_version: "0.12.0"
+    story_version: "0.12.1"
     home_dir: "/root"
     APP_HOME: "/root/.story"
     ADDRBOOK_URL: "https://server-5.itrocket.net/testnet/story/addrbook.json"
@@ -166,17 +166,40 @@
       debug:
         msg: "Progress: 35% - Go installed"
 
+    - name: Stop Story services if running
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - story-consensus-node
+        - story-geth-node
+      ignore_errors: yes
+
+    - name: Remove existing geth binary
+      file:
+        path: "/usr/local/bin/geth"
+        state: absent
+      ignore_errors: yes
+
+    - name: Remove existing story binary
+      file:
+        path: "/usr/local/bin/story"
+        state: absent
+      ignore_errors: yes
+
     - name: Download and install story-geth
       get_url:
         url: "https://github.com/piplabs/story-geth/releases/download/v{{ geth_version }}/geth-linux-amd64"
         dest: "/usr/local/bin/geth"
         mode: '0755'
+        force: yes
 
     - name: Download and install story binary
       get_url:
         url: "https://github.com/piplabs/story/releases/download/v{{ story_version }}/story-linux-amd64"
         dest: "/usr/local/bin/story"
         mode: '0755'
+        force: yes
 
     - name: Display progress after binaries installation
       debug:

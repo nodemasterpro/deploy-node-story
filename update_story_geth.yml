@@ -4,52 +4,37 @@
   become: true
 
   vars:
-    geth_version: "0.9.4"
+    geth_version: "0.10.0"
     home_dir: "/root"
 
   tasks:
-    - name: Télécharger la nouvelle version de story-geth
-      get_url:
-        url: "https://github.com/piplabs/story-geth/releases/download/v{{ geth_version }}/geth-linux-amd64"
-        dest: "{{ home_dir }}/geth-linux-amd64-{{ geth_version }}"
-        mode: '0755'
-
-    - name: Arrêter le service story-geth-node
+    - name: Stop story-geth-node service
       systemd:
         name: story-geth-node
-        state: stopped
+        state: stopped  
 
-    - name: Remplacer l'ancien binaire geth par le nouveau
-      copy:
-        src: "{{ home_dir }}/geth-linux-amd64-{{ geth_version }}"
+    - name: Remove existing geth binary
+      file:
+        path: "/usr/local/bin/geth"
+        state: absent
+
+    - name: Download new version of story-geth
+      get_url:
+        url: "https://github.com/piplabs/story-geth/releases/download/v{{ geth_version }}/geth-linux-amd64"
         dest: "/usr/local/bin/geth"
         mode: '0755'
-        remote_src: yes
+        force: yes
 
-    - name: Démarrer le service story-geth-node
+    - name: Start story-geth-node service
       systemd:
         name: story-geth-node
         state: started
 
-    - name: Nettoyer les fichiers téléchargés
-      file:
-        path: "{{ home_dir }}/geth-linux-amd64-{{ geth_version }}"
-        state: absent
-
-    # Les tâches suivantes restent inchangées
-    - name: Vérifier la version de geth
-      command: geth version
-      register: geth_version_output
-
-    - name: Afficher la version de geth
-      debug:
-        var: geth_version_output.stdout_lines
-
-    - name: Vérifier le statut du service story-geth-node
+    - name: Check story-geth-node service status
       systemd:
         name: story-geth-node
       register: service_status
 
-    - name: Afficher le statut du service
+    - name: Display service status
       debug:
         var: service_status.status
