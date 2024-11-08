@@ -108,6 +108,7 @@
           - tar
           - lz4
           - pv
+          - aria2
         state: present
 
     - name: Display progress after dependencies installation
