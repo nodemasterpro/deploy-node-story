@@ -6,6 +6,11 @@
   vars:
     stake_amount: "500000000000000000"
 
+  vars_prompt:
+    - name: moniker
+      prompt: "Enter the moniker for the node"
+      private: false  
+
   tasks:
     - name: Read private key
       shell: cat /root/.story/story/config/private_key.txt | awk -F'=' '{print $2}'
@@ -13,7 +18,7 @@
 
     - name: Register validator
       shell: >
-        story validator create --stake {{ stake_amount }} --private-key {{ private_key.stdout }}
+        story validator create --stake {{ stake_amount }} --private-key {{ private_key.stdout }} --moniker {{ moniker }}
       register: registration_result
 
     - name: Display registration result

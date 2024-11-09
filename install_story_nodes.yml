@@ -14,6 +14,7 @@
     ADDRBOOK_FILE: "{{ APP_HOME }}/story/config/addrbook.json"
     PEERS_URL: "https://story-testnet-rpc.itrocket.net/net_info"
     SNAPSHOT_BASE_URL: "https://server-3.itrocket.net/testnet/story/"
+    project_name: "story"  
     STORY_CHAIN_ID: "odyssey"
     STORY_PORT: "22"
     WALLET_BACKUP_DIR: "/root/wallets-story-backup"
@@ -202,6 +203,7 @@
         mode: '0755'
         force: yes
 
+
     - name: Display progress after binaries installation
       debug:
         msg: "Progress: 45% - Story and Geth binaries installed"
@@ -323,8 +325,7 @@
       file:
         path: "/root/{{ story_snapshot_filename }}"
         state: absent
-      tags:
-        - snapshot
+      when: extract_story_output.rc == 0
 
     - name: Restore priv_validator_state.json if backup exists
       copy:
@@ -381,8 +382,7 @@
       file:
         path: "/root/{{ geth_snapshot_filename }}"
         state: absent
-      tags:
-        - snapshot
+      when: extract_geth_output.rc == 0
     
     - name: Fetch peers
       shell: |
@@ -473,59 +473,8 @@
       systemd:
         name: story-consensus-node
         state: started
-   
- 
-    - name: Check and restart services if needed
-      block:
-        - name: Check services status
-          service_facts:
-
-        - name: Restart story-consensus-node if not active
-          systemd:
-            name: story-consensus-node
-            state: restarted
-          when: ansible_facts.services['story-consensus-node.service'].state != 'running'
-
-        - name: Restart story-geth-node if not active
-          systemd:
-            name: story-geth-node
-            state: restarted
-          when: ansible_facts.services['story-geth-node.service'].state != 'running'
-
-
-        - name: Wait for services to be active
-          wait_for:
-            timeout: 30
-          loop:
-            - "story-consensus-node"
-            - "story-geth-node"
-          register: service_status
-          until: ansible_facts.services[item + '.service'].state == 'running'
-          retries: 3
-          delay: 10
-
-        - name: Check service logs for errors
-          shell: |
-            journalctl -u {{ item }} -n 50 --no-pager | grep -i "error\|failed" || true
-          register: service_logs
-          loop:
-            - story-consensus-node
-            - story-geth-node
-
-
-        - name: Display service errors if present
-          debug:
-            msg: "Errors found in service {{ item.item }}: {{ item.stdout }}"
-          when: item.stdout != ""
-          loop: "{{ service_logs.results }}"
-
-      rescue:
-        - name: Service check failure notification
-          debug:
-            msg: "Service check failed. Please check services status manually."
-
 
     - name: Display final progress
       debug:
         msg: "Progress: 100% - Story node installation completed"
-
+    
