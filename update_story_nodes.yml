@@ -1,0 +1,124 @@
+---
+# Playbook to update Story Protocol nodes (both Geth and Consensus nodes)
+- name: Update Story Protocol Nodes (Geth and Consensus)
+  hosts: localhost
+  become: true
+  gather_facts: false
+
+  # Define versions for Story and Geth binaries
+  vars:
+    story_version: "0.12.1"
+    geth_version: "0.10.1"
+    home_dir: "/root"
+
+  tasks:
+    # Stop all Story-related services before update
+    - name: Stop Story services
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - story-consensus-node
+        - story-geth-node
+      register: stop_services
+
+    # Kill remaining processes if any
+    - name: Check and kill remaining story process
+      shell: |
+        for pid in $(pgrep -f "/usr/local/bin/story run"); do
+          echo "Force stopping story process (PID: $pid)..."
+          kill -15 $pid
+          sleep 2
+          if ps -p $pid > /dev/null; then
+            echo "Process still running, using SIGKILL..."
+            kill -9 $pid
+          fi
+        done
+        rm -f /root/.story/story/data/application.db/LOCK
+      ignore_errors: yes
+
+    - name: Check and kill remaining geth process
+      shell: |
+        for pid in $(pgrep -f "/usr/local/bin/geth.*--odyssey"); do
+          echo "Force stopping geth process (PID: $pid)..."
+          kill -15 $pid
+          sleep 2
+          if ps -p $pid > /dev/null; then
+            echo "Process still running, using SIGKILL..."
+            kill -9 $pid
+          fi
+        done
+      ignore_errors: yes
+
+    # Remove existing binaries to ensure clean installation
+    - name: Remove existing binaries
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/usr/local/bin/story"
+        - "/usr/local/bin/geth"
+
+    # Download and install the new version of story-geth
+    - name: Download and install story-geth
+      get_url:
+        url: "https://github.com/piplabs/story-geth/releases/download/v{{ geth_version }}/geth-linux-amd64"
+        dest: "/usr/local/bin/geth"
+        mode: '0755'
+        force: yes
+
+    # Download and install the new version of story binary
+    - name: Download and install story binary
+      get_url:
+        url: "https://github.com/piplabs/story/releases/download/v{{ story_version }}/story-linux-amd64"
+        dest: "/usr/local/bin/story"
+        mode: '0755'
+        force: yes
+
+    # Verify the installed story version
+    - name: Check story version
+      shell: |
+        story version | head -n 1 | awk '{print $2}'
+      register: story_version_output
+
+    # Verify the installed geth version
+    - name: Check geth version
+      shell: |
+        geth version | head -n 1
+      register: geth_version_output
+
+    # Restart Story geth service first
+    - name: Start Story geth service
+      systemd:
+        name: story-geth-node
+        state: started
+      register: geth_start
+
+    # Wait for geth initialization
+    - name: Wait for geth initialization
+      pause:
+        seconds: 5
+
+    # Start Story consensus service
+    - name: Start Story consensus service
+      systemd:
+        name: story-consensus-node
+        state: started
+      register: consensus_start
+
+    # Check the current status of all services
+    - name: Get services status
+      systemd:
+        name: "{{ item }}"
+      register: service_status
+      loop:
+        - story-consensus-node
+        - story-geth-node
+
+    # Display the results of the update process
+    - name: Display update results
+      debug:
+        msg:
+          - "Services status: {{ service_status.results | map(attribute='status.ActiveState') | list }}"
+
+

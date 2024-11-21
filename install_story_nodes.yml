@@ -469,6 +469,10 @@
         name: story-geth-node
         state: started    
 
+    - name: Wait for geth initialization
+      pause:
+        seconds: 5
+
     - name: start story-consensus-node service
       systemd:
         name: story-consensus-node

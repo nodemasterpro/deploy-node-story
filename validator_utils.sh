@@ -20,12 +20,29 @@ function view_validator_info() {
     curl -s http://localhost:26657/status | jq
 }
 
+function check_version() {
+    case "$1" in
+        story)
+            story version
+            ;;
+        geth)
+            geth version
+            ;;
+        *)
+            echo "Error: Please specify 'story' or 'geth' as argument"
+            echo "Usage: $0 version {story|geth}"
+            exit 1
+            ;;
+    esac
+}
+
 function display_help() {
-    echo "Usage: $0 {backup_keys|restore_keys|sync|info}"
-    echo "  backup_keys   : Backup validator keys"
-    echo "  restore_keys  : Restore validator keys"
-    echo "  sync          : Check synchronization status"
-    echo "  info          : View node status information"
+    echo "Usage: $0 {backup_keys|restore_keys|sync|info|version}"
+    echo "  backup_keys          : Backup validator keys"
+    echo "  restore_keys         : Restore validator keys"
+    echo "  sync                 : Check synchronization status"
+    echo "  info                 : View node status information"
+    echo "  version {story|geth} : Check Story or Geth version"
 }
 
 case "$1" in
@@ -40,6 +57,9 @@ case "$1" in
         ;;
     info)
         view_validator_info
+        ;;
+    version)
+        check_version "$2"
         ;;
     help)
         display_help
