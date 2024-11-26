@@ -7,7 +7,7 @@
 
   # Define versions for Story and Geth binaries
   vars:
-    story_version: "0.12.1"
+    story_version: "0.13.0"
     geth_version: "0.10.1"
     home_dir: "/root"
 
