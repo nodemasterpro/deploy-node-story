@@ -36,13 +36,18 @@ function check_version() {
     esac
 }
 
+function update_peers() {
+    ansible-playbook update_peers.yml
+}
+
 function display_help() {
-    echo "Usage: $0 {backup_keys|restore_keys|sync|info|version}"
+    echo "Usage: $0 {backup_keys|restore_keys|sync|info|version|update_peers}"
     echo "  backup_keys          : Backup validator keys"
     echo "  restore_keys         : Restore validator keys"
     echo "  sync                 : Check synchronization status"
     echo "  info                 : View node status information"
     echo "  version {story|geth} : Check Story or Geth version"
+    echo "  update_peers         : Update peers list and restart services"
 }
 
 case "$1" in
@@ -60,6 +65,9 @@ case "$1" in
         ;;
     version)
         check_version "$2"
+        ;;
+    update_peers)
+        update_peers
         ;;
     help)
         display_help
