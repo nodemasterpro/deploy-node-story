@@ -1,0 +1,29 @@
+---
+- name: Update Story Node Peers
+  hosts: localhost
+  become: true
+  vars:
+    PEERS_URL: "https://rpc.testnet.story.xyz/net_info"
+    home_dir: "/root"
+
+  tasks:
+    - name: Fetch peers
+      shell: |
+        curl -sS {{ PEERS_URL }} | jq -r '.result.peers[] | "\(.node_info.id)@\(.remote_ip):\(.node_info.listen_addr)"' | awk -F ':' '{print $1":"$(NF)}' | paste -sd, -
+      register: peers
+
+    - name: Update config.toml with peers
+      lineinfile:
+        path: "{{ home_dir }}/.story/story/config/config.toml"
+        regexp: '^persistent_peers *=.*'
+        line: 'persistent_peers = "{{ peers.stdout }}"'
+        backup: yes
+
+    - name: Restart story-consensus-node service
+      systemd:
+        name: story-consensus-node
+        state: restarted
+
+    - name: Display completion message
+      debug:
+        msg: "Peers have been updated and service has been restarted."
