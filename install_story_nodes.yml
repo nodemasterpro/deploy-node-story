@@ -62,6 +62,7 @@
               with_items:
                 - "{{ APP_HOME }}/story/config/private_key.txt"
                 - "{{ APP_HOME }}/story/config/priv_validator_key.json"
+                - "{{ APP_HOME }}/story/config/node_key.json"
                 - "{{ APP_HOME }}/story/data/priv_validator_state.json"
               ignore_errors: yes
 
@@ -455,6 +456,7 @@
           with_items:
             - { src: 'private_key.txt', dest: '{{ APP_HOME }}/story/config/private_key.txt' }
             - { src: 'priv_validator_key.json', dest: '{{ APP_HOME }}/story/config/priv_validator_key.json' }
+            - { src: 'node_key.json', dest: '{{ APP_HOME }}/story/config/node_key.json' }
             - { src: 'priv_validator_state.json', dest: '{{ APP_HOME }}/story/data/priv_validator_state.json' }
           when: backup_exists.stat.exists
           ignore_errors: yes
