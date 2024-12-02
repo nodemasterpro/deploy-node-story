@@ -16,7 +16,7 @@
     SNAPSHOT_BASE_URL: "https://server-3.itrocket.net/testnet/story/"
     project_name: "story"  
     STORY_CHAIN_ID: "odyssey"
-    STORY_PORT: "22"
+    STORY_PORT: "26"
     WALLET_BACKUP_DIR: "/root/wallets-story-backup"
 
   vars_prompt:

@@ -4,7 +4,7 @@
   become: true
 
   vars:
-    stake_amount: "500000000000000000"
+    stake_amount: "1024000000000000000000"
 
   vars_prompt:
     - name: moniker

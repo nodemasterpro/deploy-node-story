@@ -17,7 +17,7 @@ function check_sync_status() {
 }
 
 function view_validator_info() {
-    curl -s http://localhost:22657/status | jq
+    curl -s http://localhost:26657/status | jq
 }
 
 function check_version() {
