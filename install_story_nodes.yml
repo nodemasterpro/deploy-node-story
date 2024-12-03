@@ -337,13 +337,13 @@
 
     - name: Ensure Geth data directory exists
       file:
-        path: "{{ home_dir }}/.story/geth/iliad/geth"
+        path: "{{ home_dir }}/.story/geth/odyssey/geth"
         state: directory
         mode: '0755'
     
     - name: Remove old Geth data
       file:
-        path: "{{ home_dir }}/.story/geth/iliad/geth/chaindata"
+        path: "{{ home_dir }}/.story/geth/odyssey/geth/chaindata"
         state: absent
 
     
@@ -368,7 +368,7 @@
 
     - name: Extract Geth snapshot
       shell: |
-        lz4 -cd "/root/{{ geth_snapshot_filename }}" | tar -xf - -C {{ home_dir }}/.story/geth/iliad/geth
+        lz4 -cd "/root/{{ geth_snapshot_filename }}" | tar -xf - -C {{ home_dir }}/.story/geth/odyssey/geth
       args:
         executable: /bin/bash
       register: extract_geth_output

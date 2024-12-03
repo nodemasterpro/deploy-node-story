@@ -101,13 +101,13 @@
             state: absent
           loop:
             - "{{ home_dir }}/story/data"
-            - "{{ home_dir }}/geth/iliad/geth/chaindata"
+            - "{{ home_dir }}/geth/odyssey/geth/chaindata"
 
         - name: Extract Story snapshot
           shell: "lz4 -dc {{ snapshot_dir }}/{{ story_snapshot }} | tar -xf - -C {{ home_dir }}/story"
 
         - name: Extract Geth snapshot
-          shell: "lz4 -dc {{ snapshot_dir }}/{{ geth_snapshot }} | tar -xf - -C {{ home_dir }}/geth/iliad/geth"
+          shell: "lz4 -dc {{ snapshot_dir }}/{{ geth_snapshot }} | tar -xf - -C {{ home_dir }}/geth/odyssey/geth"
 
         - name: Restore priv_validator_state.json
           copy:
