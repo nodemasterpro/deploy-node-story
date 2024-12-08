@@ -5,24 +5,24 @@
   become: true
   gather_facts: false
 
-  # Define versions for Story and Geth binaries
   vars:
     story_version: "0.13.0"
-    geth_version: "0.10.1"
+    geth_version: "0.11.0"
     home_dir: "/root"
+    app: "all"  # Default value, can be overridden with -e app="geth" or app="story"
 
   tasks:
-    # Stop all Story-related services before update
+    # Stop services based on app parameter
     - name: Stop Story services
       systemd:
         name: "{{ item }}"
         state: stopped
       loop:
-        - story-consensus-node
-        - story-geth-node
-      register: stop_services
+        - "{{ (app in ['story', 'all']) | ternary('story-consensus-node', '') }}"
+        - "{{ (app in ['geth', 'all']) | ternary('story-geth-node', '') }}"
+      when: item != ''
 
-    # Kill remaining processes if any
+    # Kill Story process if updating story
     - name: Check and kill remaining story process
       shell: |
         for pid in $(pgrep -f "/usr/local/bin/story run"); do
@@ -36,7 +36,9 @@
         done
         rm -f /root/.story/story/data/application.db/LOCK
       ignore_errors: yes
+      when: app in ['story', 'all']
 
+    # Kill Geth process if updating geth
     - name: Check and kill remaining geth process
       shell: |
         for pid in $(pgrep -f "/usr/local/bin/geth.*--odyssey"); do
@@ -49,76 +51,75 @@
           fi
         done
       ignore_errors: yes
+      when: app in ['geth', 'all']
 
-    # Remove existing binaries to ensure clean installation
+    # Remove binaries based on app parameter
     - name: Remove existing binaries
       file:
         path: "{{ item }}"
         state: absent
       loop:
-        - "/usr/local/bin/story"
-        - "/usr/local/bin/geth"
+        - "{{ (app in ['story', 'all']) | ternary('/usr/local/bin/story', '') }}"
+        - "{{ (app in ['geth', 'all']) | ternary('/usr/local/bin/geth', '') }}"
+      when: item != ''
 
-    # Download and install the new version of story-geth
+    # Download and install story-geth if needed
     - name: Download and install story-geth
       get_url:
         url: "https://github.com/piplabs/story-geth/releases/download/v{{ geth_version }}/geth-linux-amd64"
         dest: "/usr/local/bin/geth"
         mode: '0755'
         force: yes
+      when: app in ['geth', 'all']
 
-    # Download and install the new version of story binary
+    # Download and install story binary if needed
     - name: Download and install story binary
       get_url:
         url: "https://github.com/piplabs/story/releases/download/v{{ story_version }}/story-linux-amd64"
         dest: "/usr/local/bin/story"
         mode: '0755'
         force: yes
+      when: app in ['story', 'all']
 
-    # Verify the installed story version
+    # Verify story version if updated
     - name: Check story version
       shell: |
         story version | head -n 1 | awk '{print $2}'
       register: story_version_output
+      when: app in ['story', 'all']
 
-    # Verify the installed geth version
+    # Verify geth version if updated
     - name: Check geth version
       shell: |
         geth version | head -n 1
       register: geth_version_output
+      when: app in ['geth', 'all']
 
-    # Restart Story geth service first
+    # Start services based on app parameter
     - name: Start Story geth service
       systemd:
         name: story-geth-node
         state: started
-      register: geth_start
+      when: app in ['geth', 'all']
 
-    # Wait for geth initialization
+    # Wait for geth initialization if needed
     - name: Wait for geth initialization
       pause:
         seconds: 5
+      when: app in ['all']
 
-    # Start Story consensus service
+    # Start Story consensus service if needed
     - name: Start Story consensus service
       systemd:
         name: story-consensus-node
         state: started
-      register: consensus_start
+      when: app in ['story', 'all']
 
-    # Check the current status of all services
-    - name: Get services status
-      systemd:
-        name: "{{ item }}"
-      register: service_status
-      loop:
-        - story-consensus-node
-        - story-geth-node
-
-    # Display the results of the update process
+    # Display update results
     - name: Display update results
       debug:
         msg:
-          - "Services status: {{ service_status.results | map(attribute='status.ActiveState') | list }}"
+          - "{{ 'Story version: ' + story_version_output.stdout if (app in ['story', 'all'] and story_version_output.stdout is defined) else '' }}"
+          - "{{ 'Geth version: ' + geth_version_output.stdout if (app in ['geth', 'all'] and geth_version_output.stdout is defined) else '' }}"
 
 
