@@ -13,7 +13,10 @@
     ADDRBOOK_URL: "https://server-5.itrocket.net/testnet/story/addrbook.json"
     ADDRBOOK_FILE: "{{ APP_HOME }}/story/config/addrbook.json"
     PEERS_URL: "https://story-testnet-rpc.itrocket.net/net_info"
-    SNAPSHOT_BASE_URL: "https://server-3.itrocket.net/testnet/story/"
+    #SNAPSHOT_BASE_URL: "https://server-3.itrocket.net/testnet/story/"
+    SNAPSHOT_BASE_URL: "https://story.josephtran.co/"
+    story_snapshot_filename: "Story_snapshot.lz4"
+    geth_snapshot_filename: "Geth_snapshot.lz4"
     project_name: "story"  
     STORY_CHAIN_ID: "odyssey"
     STORY_PORT: "26"
@@ -290,6 +293,10 @@
         state: absent
     
     
+    - name: Display snapshot download start message
+      debug:
+        msg: "{{ {'task': 'Downloading network snapshot (this may take a while)...', 'progress': 60, 'status': 'running'} | to_json }}"
+
     - name: Download Story snapshot using aria2c
       shell: |
         aria2c -x 16 -s 16 {{ SNAPSHOT_BASE_URL }}{{ story_snapshot_filename }} -d /root/
@@ -307,7 +314,7 @@
 
     - name: Display progress after snapshot download
       debug:
-        msg: "Progress: 65% - Snapshots downloaded"
+        msg: "{{ {'task': 'Snapshots downloaded', 'progress': 65, 'status': 'running'} | to_json }}"
 
     - name: Extract Story snapshot
       shell: |
@@ -317,11 +324,7 @@
       register: extract_story_output
       tags:
         - snapshot
-
-    - name: Display progress after snapshot extraction
-      debug:
-        msg: "Progress: 75% - Snapshots extracted"
-
+   
     - name: Remove downloaded Story snapshot file
       file:
         path: "/root/{{ story_snapshot_filename }}"
@@ -345,7 +348,6 @@
       file:
         path: "{{ home_dir }}/.story/geth/odyssey/geth/chaindata"
         state: absent
-
     
     - name: Download Geth snapshot using aria2c
       shell: |
@@ -362,10 +364,7 @@
       tags:
         - snapshot
 
-    - name: Display progress after snapshot download
-      debug:
-        msg: "Progress: 65% - Snapshots downloaded"
-
+   
     - name: Extract Geth snapshot
       shell: |
         lz4 -cd "/root/{{ geth_snapshot_filename }}" | tar -xf - -C {{ home_dir }}/.story/geth/odyssey/geth
@@ -377,13 +376,14 @@
 
     - name: Display progress after snapshot extraction
       debug:
-        msg: "Progress: 75% - Snapshots extracted"
+        msg: "{{ {'task': 'Snapshots extracted', 'progress': 75, 'status': 'running'} | to_json }}"
 
     - name: Remove downloaded Geth snapshot file
       file:
         path: "/root/{{ geth_snapshot_filename }}"
         state: absent
       when: extract_geth_output.rc == 0
+    
     
     - name: Fetch peers
       shell: |
