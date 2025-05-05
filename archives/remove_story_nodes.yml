@@ -1,0 +1,107 @@
+---
+- name: Remove Story Protocol Nodes
+  hosts: all
+  become: yes
+  
+  vars:
+    backup_keys: true
+    backup_dir: "/root/backup-keys-story-{{ ansible_date_time.date }}"
+    
+  tasks:
+    - name: Backup keys if requested
+      block:
+        - name: Create backup directory
+          file:
+            path: "{{ backup_dir }}"
+            state: directory
+            mode: '0700'
+            
+        - name: Check for EVM private key
+          stat:
+            path: "/home/{{ ansible_user }}/.story/story/config/private_key.txt"
+          register: evm_key
+            
+        - name: Check for validator key
+          stat:
+            path: "/home/{{ ansible_user }}/.story/story/config/priv_validator_key.json"
+          register: validator_key
+            
+        - name: Backup EVM private key
+          copy:
+            src: "/home/{{ ansible_user }}/.story/story/config/private_key.txt"
+            dest: "{{ backup_dir }}/private_key.txt"
+            remote_src: yes
+          when: evm_key.stat.exists
+            
+        - name: Backup validator key
+          copy:
+            src: "/home/{{ ansible_user }}/.story/story/config/priv_validator_key.json"
+            dest: "{{ backup_dir }}/priv_validator_key.json"
+            remote_src: yes
+          when: validator_key.stat.exists
+            
+        - name: Create archive of keys
+          archive:
+            path: 
+              - "{{ backup_dir }}/private_key.txt"
+              - "{{ backup_dir }}/priv_validator_key.json"
+            dest: "{{ backup_dir }}/story_keys_backup.tar.gz"
+            format: gz
+          when: evm_key.stat.exists or validator_key.stat.exists
+            
+        - name: Display backup message
+          debug:
+            msg: "Keys backed up to {{ backup_dir }}/story_keys_backup.tar.gz"
+          when: evm_key.stat.exists or validator_key.stat.exists
+      when: backup_keys
+        
+    - name: Stop Story services
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - story
+        - story-geth
+      ignore_errors: yes
+        
+    - name: Remove service files
+      file:
+        path: "/etc/systemd/system/{{ item }}.service"
+        state: absent
+      loop:
+        - story
+        - story-geth
+        
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+        
+    - name: Remove story binaries
+      file:
+        path: "/home/{{ ansible_user }}/go/bin/{{ item }}"
+        state: absent
+      loop:
+        - story
+        - geth
+      ignore_errors: yes
+        
+    - name: Remove Story directories
+      file:
+        path: "/home/{{ ansible_user }}/.story"
+        state: absent
+      ignore_errors: yes
+        
+    - name: Remove source code directories
+      file:
+        path: "/home/{{ ansible_user }}/{{ item }}"
+        state: absent
+      loop:
+        - story
+        - story-geth
+      ignore_errors: yes
+        
+    - name: Display completion message
+      debug:
+        msg: 
+          - "Story nodes have been removed."
+          - "Keys backup (if enabled) is available at: {{ backup_dir }}/story_keys_backup.tar.gz"

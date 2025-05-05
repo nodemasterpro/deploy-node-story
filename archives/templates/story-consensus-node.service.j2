@@ -1,0 +1,13 @@
+[Unit]
+Description=Story Consensus Node daemon
+After=network-online.target
+
+[Service]
+User={{ ansible_user }}
+ExecStart={{ go_bin }}/story start --home {{ story_home_dir }}
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,120 @@
+---
+# Playbook to update Story Protocol nodes (both Geth and Consensus nodes)
+- name: Update Story Protocol Nodes for Aeneid Testnet
+  hosts: all
+  become: yes
+  vars:
+    story_geth_version: "v1.0.2"
+    story_version: "v1.2.0"
+    go_bin: "$HOME/go/bin"
+    app: "all"  # Default value, can be overridden with -e app="geth" or app="story"
+
+  tasks:
+    - name: Stop Story services
+      systemd:
+        name: "{{ item }}"
+        state: stopped
+      loop:
+        - "{{ (app in ['story', 'all']) | ternary('story', '') }}"
+        - "{{ (app in ['geth', 'all']) | ternary('story-geth', '') }}"
+      when: item != ''
+      ignore_errors: true
+
+    - name: Clone and build Story Geth (latest version)
+      block:
+        - name: Clone Story Geth repository
+          git:
+            repo: https://github.com/piplabs/story-geth.git
+            dest: "/home/{{ ansible_user }}/story-geth"
+            version: "{{ story_geth_version }}"
+            force: yes
+
+        - name: Build Story Geth
+          shell: |
+            cd /home/{{ ansible_user }}/story-geth
+            make geth
+          args:
+            executable: /bin/bash
+
+        - name: Copy Geth binary
+          shell: |
+            mkdir -p "/home/{{ ansible_user }}/go/bin"
+            cp /home/{{ ansible_user }}/story-geth/build/bin/geth "/home/{{ ansible_user }}/go/bin/"
+          args:
+            executable: /bin/bash
+      when: app in ['geth', 'all']
+
+    - name: Clone and build Story (latest version)
+      block:
+        - name: Clone Story repository
+          git:
+            repo: https://github.com/piplabs/story
+            dest: "/home/{{ ansible_user }}/story"
+            version: "{{ story_version }}"
+            force: yes
+
+        - name: Build Story
+          shell: |
+            cd /home/{{ ansible_user }}/story
+            go build -o story ./client
+            mkdir -p "/home/{{ ansible_user }}/go/bin/"
+            mv /home/{{ ansible_user }}/story/story "/home/{{ ansible_user }}/go/bin/"
+          args:
+            executable: /bin/bash
+      when: app in ['story', 'all']
+
+    - name: Update service files
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: '0644'
+      with_items:
+        - { src: 'templates/story-geth-node.service.j2', dest: '/etc/systemd/system/story-geth.service' }
+        - { src: 'templates/story-consensus-node.service.j2', dest: '/etc/systemd/system/story.service' }
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    - name: Start Story Geth service
+      systemd:
+        name: story-geth
+        enabled: yes
+        state: started
+      when: app in ['geth', 'all']
+
+    - name: Wait for Geth to initialize
+      pause:
+        seconds: 5
+      when: app in ['all']
+
+    - name: Start Story service
+      systemd:
+        name: story
+        enabled: yes
+        state: started
+      when: app in ['story', 'all']
+
+    - name: Check Story Geth version
+      shell: |
+        /home/{{ ansible_user }}/go/bin/geth version
+      register: geth_version_output
+      when: app in ['geth', 'all']
+      changed_when: false
+      ignore_errors: true
+
+    - name: Check Story version
+      shell: |
+        /home/{{ ansible_user }}/go/bin/story version
+      register: story_version_output
+      when: app in ['story', 'all']
+      changed_when: false
+      ignore_errors: true
+
+    - name: Display update results
+      debug:
+        msg:
+          - "{{ 'Story version: ' + story_version_output.stdout if (app in ['story', 'all'] and story_version_output.stdout is defined) else '' }}"
+          - "{{ 'Geth version: ' + geth_version_output.stdout if (app in ['geth', 'all'] and geth_version_output.stdout is defined) else '' }}"
+
+

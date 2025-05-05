@@ -1,0 +1,269 @@
+---
+- name: Install Story Node on Server
+  hosts: all
+  become: yes
+  vars:
+    moniker: "{{ lookup('env', 'MONIKER') | default('validator') }}"
+    story_chain_id: "aeneid"
+    story_port: "{{ lookup('env', 'STORY_PORT') | default('52') }}"
+    go_version: "1.22.5"
+    story_geth_version: "v1.0.2"
+    story_version: "v1.2.0"
+    go_bin: "$HOME/go/bin"
+    story_home_dir: "$HOME/.story/story"
+    geth_data_dir: "$HOME/.story/geth"
+    geth_http_port: "{{ story_port }}545"
+    geth_auth_port: "{{ story_port }}551"
+    geth_ws_port: "{{ story_port }}546"
+    seeds: "434af9dae402ab9f1c8a8fc15eae2d68b5be3387@story-testnet-seed.itrocket.net:29656"
+    peers: "c2a6cc9b3fa468624b2683b54790eb339db45cbf@story-testnet-peer.itrocket.net:26656"
+    import_snapshot: "{{ lookup('env', 'IMPORT_SNAPSHOT') | default('false') }}"
+    snapshot_type: "{{ lookup('env', 'SNAPSHOT_TYPE') | default('pruned') }}"
+    snapshot_dir: "/root/snapshots"
+    snapshot_base_url: "https://snapshots.validors.site/story"
+
+  tasks:
+    - name: Update and install dependencies
+      apt:
+        update_cache: yes
+        name:
+          - curl
+          - git
+          - wget
+          - htop
+          - tmux
+          - build-essential
+          - jq
+          - make
+          - lz4
+          - gcc
+          - unzip
+          - aria2
+          - liblz4-tool
+        state: present
+
+    - name: Check if Go is installed
+      shell: which go || echo "Not found"
+      register: go_check
+      changed_when: false
+
+    - name: Download and install Go
+      block:
+        - name: Download Go
+          get_url:
+            url: "https://golang.org/dl/go{{ go_version }}.linux-amd64.tar.gz"
+            dest: "/tmp/go{{ go_version }}.linux-amd64.tar.gz"
+            mode: '0644'
+
+        - name: Remove existing Go installation
+          file:
+            path: /usr/local/go
+            state: absent
+
+        - name: Install Go
+          unarchive:
+            src: "/tmp/go{{ go_version }}.linux-amd64.tar.gz"
+            dest: /usr/local
+            remote_src: yes
+
+        - name: Setup Go environment
+          lineinfile:
+            path: "/home/{{ ansible_user }}/.bash_profile"
+            line: "export PATH=$PATH:/usr/local/go/bin:~/go/bin"
+            create: yes
+
+        - name: Create Go directory
+          file:
+            path: "/home/{{ ansible_user }}/go/bin"
+            state: directory
+            mode: '0755'
+      when: go_check.stdout == "Not found"
+
+    - name: Set environment variables
+      lineinfile:
+        path: "/home/{{ ansible_user }}/.bash_profile"
+        line: "{{ item }}"
+        create: yes
+      with_items:
+        - "export MONIKER=\"{{ moniker }}\""
+        - "export STORY_CHAIN_ID=\"{{ story_chain_id }}\""
+        - "export STORY_PORT=\"{{ story_port }}\""
+
+    - name: Install Story Geth
+      block:
+        - name: Clone Story Geth repository
+          git:
+            repo: https://github.com/piplabs/story-geth.git
+            dest: "/home/{{ ansible_user }}/story-geth"
+            version: "{{ story_geth_version }}"
+            force: yes
+
+        - name: Build Story Geth
+          shell: |
+            cd /home/{{ ansible_user }}/story-geth
+            make geth
+          args:
+            executable: /bin/bash
+
+        - name: Copy Geth binary
+          shell: |
+            mkdir -p "/home/{{ ansible_user }}/go/bin"
+            cp /home/{{ ansible_user }}/story-geth/build/bin/geth "/home/{{ ansible_user }}/go/bin/"
+          args:
+            executable: /bin/bash
+
+        - name: Create Story directories
+          file:
+            path: "{{ item }}"
+            state: directory
+            mode: '0755'
+          with_items:
+            - "/home/{{ ansible_user }}/.story/story"
+            - "/home/{{ ansible_user }}/.story/geth"
+            - "{{ snapshot_dir }}"
+
+    - name: Install Story
+      block:
+        - name: Clone Story repository
+          git:
+            repo: https://github.com/piplabs/story
+            dest: "/home/{{ ansible_user }}/story"
+            version: "{{ story_version }}"
+            force: yes
+
+        - name: Build Story
+          shell: |
+            cd /home/{{ ansible_user }}/story
+            go build -o story ./client
+            mkdir -p "/home/{{ ansible_user }}/go/bin/"
+            mv /home/{{ ansible_user }}/story/story "/home/{{ ansible_user }}/go/bin/"
+          args:
+            executable: /bin/bash
+            
+        - name: Initialize Story
+          shell: |
+            source /home/{{ ansible_user }}/.bash_profile
+            /home/{{ ansible_user }}/go/bin/story init --moniker {{ moniker }} --network {{ story_chain_id }}
+          args:
+            executable: /bin/bash
+
+        - name: Set seeds and peers
+          shell: |
+            sed -i -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*seeds *=.*/seeds = \"{{ seeds }}\"/}" \
+                   -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*persistent_peers *=.*/persistent_peers = \"{{ peers }}\"/}" /home/{{ ansible_user }}/.story/story/config/config.toml
+          args:
+            executable: /bin/bash
+
+        - name: Configure custom ports in story.toml
+          shell: |
+            sed -i.bak -e "s%:1317%:{{ story_port }}317%g;
+            s%:8551%:{{ story_port }}551%g" /home/{{ ansible_user }}/.story/story/config/story.toml
+          args:
+            executable: /bin/bash
+
+        - name: Configure custom ports in config.toml
+          shell: |
+            sed -i.bak -e "s%:26658%:{{ story_port }}658%g;
+            s%:26657%:{{ story_port }}657%g;
+            s%:26656%:{{ story_port }}656%g;
+            s%^external_address = \"\"%external_address = \"$(wget -qO- eth0.me):{{ story_port }}656\"%;
+            s%:26660%:{{ story_port }}660%g" /home/{{ ansible_user }}/.story/story/config/config.toml
+          args:
+            executable: /bin/bash
+
+        - name: Enable prometheus and disable indexing
+          shell: |
+            sed -i -e "s/prometheus = false/prometheus = true/" /home/{{ ansible_user }}/.story/story/config/config.toml
+            sed -i -e "s/^indexer *=.*/indexer = \"null\"/" /home/{{ ansible_user }}/.story/story/config/config.toml
+          args:
+            executable: /bin/bash
+
+    - name: Deploy service files
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        mode: '0644'
+      with_items:
+        - { src: 'templates/story-geth-node.service.j2', dest: '/etc/systemd/system/story-geth.service' }
+        - { src: 'templates/story-consensus-node.service.j2', dest: '/etc/systemd/system/story.service' }
+
+    - name: Reload systemd
+      systemd:
+        daemon_reload: yes
+
+    # Cette section gère l'importation des snapshots si activée
+    - name: Import snapshot if requested
+      block:
+        - name: Create snapshot directory
+          file:
+            path: "{{ snapshot_dir }}"
+            state: directory
+            mode: '0755'
+
+        - name: Download Geth snapshot
+          get_url:
+            url: "{{ snapshot_base_url }}/geth_{{ snapshot_type }}_latest.tar.lz4"
+            dest: "{{ snapshot_dir }}/geth_{{ snapshot_type }}_latest.tar.lz4"
+          register: download_geth_snapshot
+          ignore_errors: yes
+
+        - name: Download Story snapshot
+          get_url:
+            url: "{{ snapshot_base_url }}/story_{{ snapshot_type }}_latest.tar.lz4"
+            dest: "{{ snapshot_dir }}/story_{{ snapshot_type }}_latest.tar.lz4"
+          register: download_story_snapshot
+          ignore_errors: yes
+
+        - name: Download Geth snapshot with aria2 (fallback)
+          shell: |
+            aria2c -x 16 -s 16 "{{ snapshot_base_url }}/geth_{{ snapshot_type }}_latest.tar.lz4" -d "{{ snapshot_dir }}"
+          args:
+            executable: /bin/bash
+          when: download_geth_snapshot is failed
+
+        - name: Download Story snapshot with aria2 (fallback)
+          shell: |
+            aria2c -x 16 -s 16 "{{ snapshot_base_url }}/story_{{ snapshot_type }}_latest.tar.lz4" -d "{{ snapshot_dir }}"
+          args:
+            executable: /bin/bash
+          when: download_story_snapshot is failed
+
+        - name: Extract Story snapshot
+          shell: |
+            mkdir -p "/home/{{ ansible_user }}/.story/story/data"
+            lz4 -cd "{{ snapshot_dir }}/story_{{ snapshot_type }}_latest.tar.lz4" | tar -xf - -C "/home/{{ ansible_user }}/.story/story"
+          args:
+            executable: /bin/bash
+
+        - name: Extract Geth snapshot
+          shell: |
+            mkdir -p "/home/{{ ansible_user }}/.story/geth/aeneid/geth"
+            lz4 -cd "{{ snapshot_dir }}/geth_{{ snapshot_type }}_latest.tar.lz4" | tar -xf - -C "/home/{{ ansible_user }}/.story/geth/aeneid/geth"
+          args:
+            executable: /bin/bash
+
+        - name: Display snapshot import success message
+          debug:
+            msg: "Snapshots {{ snapshot_type }} importés avec succès!"
+      when: import_snapshot | bool
+
+    - name: Enable Story Geth service
+      systemd:
+        name: story-geth
+        enabled: yes
+        state: started
+
+    - name: Enable Story service
+      systemd:
+        name: story
+        enabled: yes
+        state: started
+    
+    - name: Display installation completion message
+      debug:
+        msg: 
+          - "Installation completed successfully!"
+          - "Moniker: {{ moniker }}"
+          - "Chain ID: {{ story_chain_id }}"
+          - "Snapshot imported: {{ import_snapshot }}"
+    

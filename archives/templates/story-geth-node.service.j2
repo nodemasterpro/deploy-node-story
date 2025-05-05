@@ -1,0 +1,13 @@
+[Unit]
+Description=Story Geth Node daemon
+After=network-online.target
+
+[Service]
+User={{ ansible_user }}
+ExecStart={{ go_bin }}/geth --aeneid --syncmode full --http --http.api eth,net,web3,engine --http.vhosts '*' --http.addr 0.0.0.0 --http.port {{ geth_http_port }} --authrpc.port {{ geth_auth_port }} --ws --ws.api eth,web3,net,txpool --ws.addr 0.0.0.0 --ws.port {{ geth_ws_port }} --datadir {{ geth_data_dir }}
+Restart=on-failure
+RestartSec=3
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

@@ -1,216 +1,220 @@
-# Story Protocol Node Deployment
-This repository contains Ansible and Bash scripts for the installation, updating, management, and removal of Story Protocol validator nodes on Linux systems. The playbooks and scripts are designed to simplify the process of setting up Story nodes, managing their services, and ensuring seamless node operations.
+# Story Protocol - Node Deployment for Aeneid Testnet
 
-## Prerequisites
+This repository contains Ansible and Bash scripts for installing, updating, managing, and removing Story Protocol validator nodes on Linux systems. The playbooks and scripts are designed to simplify the process of configuring Story nodes, managing their services, and ensuring proper node functioning.
+
+## System Requirements
+
+### Hardware Requirements
+For optimal performance and reliability, we recommend running your node on either:
+- A Virtual Private Server (VPS)
+- A dedicated Linux-based machine
+
 Recommended specifications for a server:
 
-Operating System: Ubuntu 22.04
-CPU: 4 cores
-RAM: 8 GB
-Storage: 200 GB SSD
-Open TCP Ports: 26666, 26667, and 30303 must be open and accessible.
-For hosting a Story node, you can opt for a VPS 2 server. Contabo is a reliable choice to meet the technical requirements of Story Protocol.
+| Hardware | Minimal Requirement |
+|----------|---------------------|
+| CPU | Dedicated 8 Cores |
+| RAM | 32 GB |
+| Disk | 500 GB NVMe Drive |
+| Bandwidth | 25 MBit/s |
 
-## Getting Started
-## Step 1: Installing Dependencies
+### Software Requirements
+- Operating System: Ubuntu 22.04 LTS
+- Root or sudo access
+
+### Required Ports
+Ensure the following ports are open and accessible:
+
+**story-geth**:
+- 8545: Required for JSON-RPC API over HTTP
+- 8546: Required for WebSockets interaction
+- 30303 (TCP + UDP): MUST be open for P2P communication
+
+**story**:
+- 26656: MUST be open for consensus P2P communication
+- 26657: Required for Tendermint RPC
+- 26660: Needed for Prometheus metrics exposure
+
+## Quick Start
+### Step 1: Install Dependencies
 Update your system's package list and install necessary tools:
 
-```
+```bash
 sudo apt update && sudo apt upgrade -y
 ```
-Install Git and Ansible:
 
-```
-sudo apt install git ansible -y
-```
-Check your Ansible version:
+Install Git:
 
+```bash
+sudo apt install git -y
 ```
-ansible --version
-```
-You must have Ansible version 2.15 or higher.
 
-## Step 2: Downloading the Project
-Clone this repository to access the Ansible playbook and all necessary files:
+### Step 2: Download the Project
+Clone this repository to access the Story node management script:
 
-```
-git clone https://github.com/nodemasterpro/deploy-node-story.git
+```bash
+git clone https://github.com/your-name/deploy-node-story.git
 cd deploy-node-story
 ```
-## Step 3: Using the Story Node Manager
-After cloning the repository, you can use the Story Node Manager script for various operations:
 
-1. To install a new Story node:
-   ```
-   ./story_node_manager.sh install your_node_name
-   ```
+### Step 3: Using the Story Node Manager
+After cloning the repository, you can use the unified Story script for various operations:
 
-2. To update an existing Story node:
-   ```
-   ./story_node_manager.sh update
+1. To install a node with a specified moniker:
+   ```bash
+   ./story.sh install your_node_name
    ```
 
-3. To view the status of your Story node:
-   ```
-   ./story_node_manager.sh status
-   ```
-
-4. To stop the Story node services:
-   ```
-   ./story_node_manager.sh stop
+2. To check the status of services:
+   ```bash
+   ./story.sh status
    ```
 
-5. To start the Story node services:
-   ```
-   ./story_node_manager.sh start
-   ```
-
-6. To remove the Story node:
-   ```
-   ./story_node_manager.sh remove
+3. To start the services:
+   ```bash
+   ./story.sh start
    ```
 
-7. To register the node as a validator:
-   ```
-   ./story_node_manager.sh register
-   ```
-   This command will run the registration process for your node to become a validator.
-
-8. To view the logs of the consensus node:
-   ```
-   ./story_node_manager.sh logs-consensus
+4. To stop the services:
+   ```bash
+   ./story.sh stop
    ```
 
-9. To view the logs of the geth node:
+5. To restart the services:
+   ```bash
+   ./story.sh restart
    ```
-   ./story_node_manager.sh logs-geth
+
+6. To view the logs:
+   ```bash
+   ./story.sh logs
    ```
 
-Note: Replace "your_node_name" with the unique name you wish to assign to your node. Installation takes about 45 minutes due to downloading and importing the snapshot.
+7. To check the synchronization status:
+   ```bash
+   ./story.sh sync
+   ```
 
-Once completed, you can find your private key in /root/.story/story/config/private_key.txt. Save it securely, as it will be useful for the next steps.
+8. To display node information:
+   ```bash
+   ./story.sh info
+   ```
 
-## Step 4: Node Synchronization Verification
-Ensure your node is fully synchronized with the Story blockchain:
+9. To show connected peers:
+   ```bash
+   ./story.sh peers
+   ```
 
+10. To display node metrics:
+    ```bash
+    ./story.sh metrics
+    ```
+
+11. To update the binaries:
+    ```bash
+    ./story.sh update
+    ```
+
+12. To register as a validator:
+    ```bash
+    ./story.sh register
+    ```
+
+Note: Installation takes approximately 30-45 minutes depending on your internet connection and server performance.
+
+## Detailed Installation
+
+### Installation Process
+The installation process includes:
+- Installing Go 1.22.5
+- Setting up environment variables
+- Downloading and building Story and Story-Geth binaries
+- Configuring services
+- Automatically downloading and importing the latest snapshots
+
+```bash
+./story.sh install your_node_name
 ```
-./validator_utils.sh sync
+
+Replace "your_node_name" with the unique name you want to assign to your node.
+
+### Customizable Variables
+You can customize the following variables by setting them as environment variables before running the install command:
+
+- `MONIKER`: Your node name (default: value provided in the command)
+- `STORY_CHAIN_ID`: Chain ID (default: "aeneid")
+- `STORY_PORT`: Base port (default: "52")
+
+Example:
+```bash
+export STORY_PORT=62
+./story.sh install my_validator
 ```
-Wait until the catching_up variable is false. Once catching_up is false, your node is fully synchronized and ready for further operations.
 
-## Step 5: Setting up your Metamask Story Node Wallet
-To register your node as a validator, you need to fund it by obtaining tokens from a faucet using your node's public address. To obtain this public address, import your node's private key into a MetaMask wallet. As a reminder, the private key is present in “/root/.story/story/config/private_key.txt”. Add the testnet Story network to this wallet. If you don’t have it, you can add it automatically from the chainlist website.
+## Project Structure
+- `install_story_nodes.yml`: Main playbook for node installation
+- `update_story_nodes.yml`: Playbook for node updates
+- `story.sh`: Unified script for all node management operations
+- `templates/`: Contains configuration files for systemd services
 
+## Information about Aeneid Testnet
+The Aeneid testnet is the latest version of the Story Protocol test network. It uses:
 
-## Step 6:Requesting Story Testnet Funds
-You need 0.5 IP for registering your node as a validator. Get funds for your wallet through faucetme by logging in with your discord and joining their discord. Then, enter the public address of your node’s metamask wallet. You will get 2 IP. You can only make one request every 24 hours.
+- Story v1.2.0
+- Story-Geth v1.0.2
 
-## Step 7: Registering the Node as a Validator
-To accomplish this step, your node must be synchronized with the blockchain and you must hold 0.5 IP (plus gas fees) in your node address for staking:
+Story Protocol draws inspiration from ETH PoS by decoupling execution and consensus clients:
+- The execution client (story-geth) relays EVM blocks into the Story consensus client via Engine API
+- It uses an ABCI++ adapter to make EVM state compatible with CometBFT
+- With this architecture, consensus efficiency is no longer bottlenecked by execution transaction throughput
 
-```
-./story_node_manager.sh register
-```
-During this process, you will be prompted to enter:
+For more information, see:
+- Official documentation: https://docs.story.foundation/network/operating-a-node/node-setup-mainnet
+- ITRocket guide: https://itrocket.net/services/testnet/story/installation/
 
-moniker: The name of your node.
-At the end of the script, you will obtain the public address of your node.
+## Troubleshooting
+If you encounter problems:
 
-After successfully creating your validator, you can view it on the Story explorer. Simply enter the public address of your node, which was provided to you at the end of the node registration script.
+1. Check the logs: `./story.sh logs`
+2. Check the synchronization status: `./story.sh sync`
+3. Ensure all necessary ports are open
+4. Restart the services: `./story.sh restart`
 
-Congratulations! Your Story validator node is operational.
+If problems persist, you can reinstall the node or update the binaries.
 
 ## Additional Information
 
-### Validator Utilities
+### Validator Registration
+After your node is fully synced, you can register as a validator:
 
-The `validator_utils.sh` script provides additional functionality to manage your validator node:
+```bash
+./story.sh register
+```
+
+This will:
+1. Export your validator and EVM keys
+2. Guide you through adding tokens to your wallet
+3. Create your validator with the appropriate parameters
+4. Backup your keys automatically
+
+Remember to save your validator private key:
+```bash
+cat $HOME/.story/story/config/priv_validator_key.json
+```
+
+### Key Management
 
 1. To backup validator keys:
    ```
-   ./validator_utils.sh backup_keys
+   ./story.sh backup-keys
    ```
 
 2. To restore validator keys:
    ```
-   ./validator_utils.sh restore_keys
-   ```
-
-3. To check synchronization status:
-   ```
-   ./validator_utils.sh sync
-   ```
-
-4. To view validator information:
-   ```
-   ./validator_utils.sh info
-   ```
-
-5. To display help information:
-   ```
-   ./validator_utils.sh help
+   ./story.sh restore-keys
    ```
 
 ### Backup and Restore
-
 Ensure to back up all important data before deleting the Story node, as this action may remove node data.
 
 By following this guide, you have successfully deployed and managed a Story validator node, contributing to the robustness of the network and potentially earning rewards. Join the Story community on Discord and Twitter to stay informed about the project.
-
-Thank you for taking the time to read this guide! If you have any questions or would like to continue the conversation, feel free to join the Story Discord server. Stay updated and connected: Follow us on Twitter, join our Telegram group, Discord server, and subscribe to our YouTube channel.
-
-### Creating data.json for Story Validators Race
-
-To participate in the Story Validators Race, you need to create a data.json file and submit it via a pull request. You can use the `create_data_json.yml` playbook to automate this process:
-
-```
-ansible-playbook create_data_json.yml
-```
-This playbook will:
-1. Create the data.json file with your validator information
-2. Fork the Story Validators Race repository
-3. Commit and push the changes to your forked repository
-4. Provide instructions for creating a pull request
-
-Follow the instructions provided by the playbook to complete the submission process.
-
-### Snapshot Management
-
-The `snapshot_manager.sh` script provides functionality to manage Story node snapshots:
-
-1. To download a snapshot:
-   ```
-   ./snapshot_manager.sh download <type>
-   ```
-
-2. To import a snapshot:
-   ```
-   ./snapshot_manager.sh import <type>
-   ```
-
-Where `<type>` can be either 'pruned' or 'archive'.
-
-These commands allow you to quickly synchronize your node using the latest available snapshot, which is much faster than syncing from scratch.
-
-### Submitting MD Files for Story Validators Race
-
-In addition to the data.json file, you need to submit several MD files detailing your validator setup and tasks completed. These files are:
-
-- submission-general-task-1.md
-- submission-general-task-2.md
-- submission-general-task-3.md
-- submission-general-task-4.md
-- submission-bonus-task-1.md
-- submission-bonus-task-2.md
-- submission-bonus-task-3.md
-
-These files should be placed in the same directory as your data.json file. The `create_data_json.yml` playbook has been updated to automatically copy these files from your local `deploy-node-story` directory to your forked repository.
-
-To ensure your MD files are included in your submission:
-
-1. Create and edit the MD files in your local `deploy-node-story` directory.
-2. Run the `create_data_json.yml` playbook as described above.
-3. The playbook will copy your MD files to the correct location in your forked repository.
-4. Follow the instructions provided by the playbook to create a pull request.
-
-Your pull request will now include both your data.json file and all the required MD files for the Story Validators Race.
