@@ -53,6 +53,7 @@ show_help() {
   echo -e "  ${GREEN}restart${NC}        - Restart the services"
   echo -e "  ${GREEN}update${NC}         - Update the binaries"
   echo -e "  ${GREEN}update-peers${NC}   - Update peers from the network"
+  echo -e "  ${GREEN}update-snapshots${NC} - Update snapshots to the latest version"
   echo -e "  ${GREEN}remove${NC}         - Remove the Story node"
   echo -e "  ${GREEN}register${NC}       - Register the node as a validator"
   echo -e "  ${GREEN}export-key${NC}     - Export validator and EVM keys"
@@ -180,8 +181,8 @@ update_peers() {
   echo -e "${BLUE}Updating peers from the network...${NC}"
   
   # Define seeds and peers
-  SEEDS="434af9dae402ab9f1c8a8fc15eae2d68b5be3387@story-testnet-seed.itrocket.net:29656"
-  PEERS="c2a6cc9b3fa468624b2683b54790eb339db45cbf@story-testnet-peer.itrocket.net:26656"
+  SEEDS="46b7995b0b77515380000b7601e6fc21f783e16f@story-testnet-seed.itrocket.net:52656"
+  PEERS="01f8a2148a94f0267af919d2eab78452c90d9864@story-testnet-peer.itrocket.net:52656,e1623185b6c5403f77533003b0440fae7c33eeed@15.235.224.129:26656,311cd3903e25ab85e5a26c44510fbc747ab61760@152.53.87.97:36656,6d77bba865d84eea83f29c48d4bf034ee3540a11@37.27.127.145:26656,803b0100deb519eebaa16b9a55058d21aa8f8dd9@135.181.240.57:33656,3d7b3efbe94b84112ec4051693438c91890b09fb@144.76.106.228:62656,d596320a90d17bd630176748d02bf9294252e3d7@195.3.223.78:62656,2440358221774ba82360a08edd4bf5d43ed441a5@65.109.22.211:52656,7e311e22cff1a0d39c3758e342fa4c2ee1aea461@188.166.224.194:28656,83b25d26b8b7dd1d4a6f68182b75097d989dcdd0@88.99.137.138:14656,db6791a8e35dee076de75aebae3c89df8bba3374@65.109.50.22:56656,dfb96be7e47cd76762c1dd45a5f76e536be47faa@65.108.45.34:32655"
   
   echo -e "${YELLOW}Setting seeds: ${SEEDS}${NC}"
   echo -e "${YELLOW}Setting peers: ${PEERS}${NC}"
@@ -726,8 +727,8 @@ install_node() {
   
   # Configure seeds and peers
   echo -e "${YELLOW}Configuring peers and seeds...${NC}"
-  SEEDS="434af9dae402ab9f1c8a8fc15eae2d68b5be3387@story-testnet-seed.itrocket.net:29656"
-  PEERS="c2a6cc9b3fa468624b2683b54790eb339db45cbf@story-testnet-peer.itrocket.net:26656"
+  SEEDS="46b7995b0b77515380000b7601e6fc21f783e16f@story-testnet-seed.itrocket.net:52656"
+  PEERS="01f8a2148a94f0267af919d2eab78452c90d9864@story-testnet-peer.itrocket.net:52656,e1623185b6c5403f77533003b0440fae7c33eeed@15.235.224.129:26656,311cd3903e25ab85e5a26c44510fbc747ab61760@152.53.87.97:36656,6d77bba865d84eea83f29c48d4bf034ee3540a11@37.27.127.145:26656,803b0100deb519eebaa16b9a55058d21aa8f8dd9@135.181.240.57:33656,3d7b3efbe94b84112ec4051693438c91890b09fb@144.76.106.228:62656,d596320a90d17bd630176748d02bf9294252e3d7@195.3.223.78:62656,2440358221774ba82360a08edd4bf5d43ed441a5@65.109.22.211:52656,7e311e22cff1a0d39c3758e342fa4c2ee1aea461@188.166.224.194:28656,83b25d26b8b7dd1d4a6f68182b75097d989dcdd0@88.99.137.138:14656,db6791a8e35dee076de75aebae3c89df8bba3374@65.109.50.22:56656,dfb96be7e47cd76762c1dd45a5f76e536be47faa@65.108.45.34:32655"
   sed -i -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*seeds *=.*/seeds = \"$SEEDS\"/}" \
          -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*persistent_peers *=.*/persistent_peers = \"$PEERS\"/}" $HOME/.story/story/config/config.toml
   
@@ -1084,6 +1085,87 @@ restore_keys() {
   echo -e "${GREEN}Keys restored successfully!${NC}"
 }
 
+# Function to update snapshots with latest version
+update_snapshots() {
+  echo -e "${BLUE}Updating to latest snapshots...${NC}"
+  
+  # Stop services
+  echo -e "${YELLOW}Stopping services...${NC}"
+  systemctl stop $STORY_SERVICE
+  sleep 1
+  systemctl stop $GETH_SERVICE
+  sleep 1
+  
+  # Install lz4 if needed
+  if ! command -v lz4 &> /dev/null; then
+    echo -e "${YELLOW}Installing lz4...${NC}"
+    sudo apt update && sudo apt install -y liblz4-tool
+  fi
+  
+  # Install curl if needed
+  if ! command -v curl &> /dev/null; then
+    echo -e "${YELLOW}Installing curl...${NC}"
+    sudo apt update && sudo apt install -y curl
+  fi
+  
+  # Get the latest snapshot filenames from the server
+  echo -e "${YELLOW}Finding latest available snapshots...${NC}"
+  
+  # Get list of files on the server
+  SNAPSHOT_HTML=$(curl -s $SNAPSHOT_BASE_URL)
+  STORY_SNAPSHOT=$(echo "$SNAPSHOT_HTML" | grep -o 'story_[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}_[0-9]\+_snap\.tar\.lz4' | sort -r | head -n 1)
+  GETH_SNAPSHOT=$(echo "$SNAPSHOT_HTML" | grep -o 'geth_story_[0-9]\{4\}-[0-9]\{2\}-[0-9]\{2\}_[0-9]\+_snap\.tar\.lz4' | sort -r | head -n 1)
+  
+  if [ -z "$STORY_SNAPSHOT" ] || [ -z "$GETH_SNAPSHOT" ]; then
+    echo -e "${RED}Error: Unable to find the most recent snapshots.${NC}"
+    exit 1
+  fi
+  
+  echo -e "${GREEN}Latest snapshots found:${NC}"
+  echo -e "Story: $STORY_SNAPSHOT"
+  echo -e "Geth: $GETH_SNAPSHOT"
+  
+  # Backup priv_validator_state.json
+  if [ -f "$HOME/.story/story/data/priv_validator_state.json" ]; then
+    echo -e "${YELLOW}Backing up priv_validator_state.json...${NC}"
+    cp $HOME/.story/story/data/priv_validator_state.json $HOME/.story/story/priv_validator_state.json.backup
+  else
+    echo -e "${YELLOW}Warning: priv_validator_state.json not found. If you're a validator, this may cause issues.${NC}"
+  fi
+  
+  # Remove old data and extract Story snapshot
+  echo -e "${YELLOW}Removing old Story data...${NC}"
+  rm -rf $HOME/.story/story/data
+  
+  echo -e "${YELLOW}Downloading and extracting Story snapshot...${NC}"
+  curl -s ${SNAPSHOT_BASE_URL}${STORY_SNAPSHOT} | lz4 -dc - | tar -xf - -C $HOME/.story/story
+  
+  # Restore priv_validator_state.json
+  if [ -f "$HOME/.story/story/priv_validator_state.json.backup" ]; then
+    echo -e "${YELLOW}Restoring priv_validator_state.json...${NC}"
+    mv $HOME/.story/story/priv_validator_state.json.backup $HOME/.story/story/data/priv_validator_state.json
+  fi
+  
+  # Remove Geth data and extract snapshot
+  echo -e "${YELLOW}Removing Geth data...${NC}"
+  rm -rf $HOME/.story/geth/aeneid/geth/chaindata
+  mkdir -p $HOME/.story/geth/aeneid/geth
+  
+  echo -e "${YELLOW}Downloading and extracting Geth snapshot...${NC}"
+  curl -s ${SNAPSHOT_BASE_URL}${GETH_SNAPSHOT} | lz4 -dc - | tar -xf - -C $HOME/.story/geth/aeneid/geth
+  
+  # Restart services
+  echo -e "${YELLOW}Enabling and restarting services...${NC}"
+  sudo systemctl daemon-reload
+  sudo systemctl enable $STORY_SERVICE $GETH_SERVICE
+  sudo systemctl restart $GETH_SERVICE
+  sleep 5
+  sudo systemctl restart $STORY_SERVICE
+  
+  echo -e "${GREEN}Snapshots updated successfully!${NC}"
+  echo -e "${YELLOW}To check logs:${NC} journalctl -u $STORY_SERVICE -u $GETH_SERVICE -f"
+}
+
 # Command processing
 case "$1" in
   # Node management commands
@@ -1107,6 +1189,9 @@ case "$1" in
     ;;
   update-peers)
     update_peers
+    ;;
+  update-snapshots)
+    update_snapshots
     ;;
   remove)
     remove_node
