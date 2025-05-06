@@ -82,7 +82,7 @@ check_dependencies() {
   local missing_deps=()
   
   # List of dependencies
-  local deps=("aria2c" "lz4" "jq" "tar" "wget" "curl")
+  local deps=("aria2c" "lz4" "jq" "tar" "wget" "curl" "make" "gcc" "g++" "git" "build-essential")
   
   # Check each dependency
   for dep in "${deps[@]}"; do
@@ -95,7 +95,18 @@ check_dependencies() {
   if [ ${#missing_deps[@]} -gt 0 ]; then
     echo -e "${YELLOW}Installing missing dependencies: ${missing_deps[*]}${NC}"
     apt update
-    apt install -y aria2 liblz4-tool jq tar wget curl
+    apt install -y aria2 liblz4-tool jq tar wget curl make gcc g++ git build-essential
+  fi
+  
+  # Verify build tools are installed
+  if ! command -v make &> /dev/null; then
+    echo -e "${RED}Failed to install 'make'. Installing essential build tools...${NC}"
+    apt install -y build-essential
+  fi
+  
+  if ! command -v gcc &> /dev/null; then
+    echo -e "${RED}Failed to install 'gcc'. Installing C compiler...${NC}"
+    apt install -y gcc g++
   fi
 }
 
@@ -721,22 +732,41 @@ install_node() {
   
   # Download and install Geth binaries
   echo -e "${YELLOW}Installing Story-Geth...${NC}"
-  cd $HOME
-  rm -rf story-geth
-  git clone https://github.com/piplabs/story-geth.git
-  cd story-geth
-  git checkout $STORY_GETH_VERSION
-  make geth
-  
-  # Ensure destination directory exists and copy geth
   mkdir -p $HOME/go/bin/
-  cp build/bin/geth $HOME/go/bin/
+  
+  # Attempt to use precompiled binary first
+  echo -e "${YELLOW}Downloading pre-compiled Geth binary...${NC}"
+  wget -O $HOME/go/bin/geth https://github.com/piplabs/story-geth/releases/download/$STORY_GETH_VERSION/geth
+  chmod +x $HOME/go/bin/geth
+  
+  # Check if binary was downloaded successfully
+  if [ ! -f "$HOME/go/bin/geth" ] || ! $HOME/go/bin/geth version &>/dev/null; then
+    echo -e "${YELLOW}Pre-compiled binary failed or not available. Building from source...${NC}"
+    
+    # Build from source as fallback
+    cd $HOME
+    rm -rf story-geth
+    git clone https://github.com/piplabs/story-geth.git
+    cd story-geth
+    git checkout $STORY_GETH_VERSION
+    
+    echo -e "${YELLOW}Building Geth from source...${NC}"
+    make geth
+    
+    if [ -f "build/bin/geth" ]; then
+      cp build/bin/geth $HOME/go/bin/
+      chmod +x $HOME/go/bin/geth
+    else
+      echo -e "${RED}Failed to build Geth binary!${NC}"
+      exit 1
+    fi
+  fi
   
   # Verify geth installation
   echo -e "${YELLOW}Verifying geth installation...${NC}"
-  if [ -f "$HOME/go/bin/geth" ]; then
+  if $HOME/go/bin/geth version &>/dev/null; then
     echo -e "${GREEN}Geth binary installed at $HOME/go/bin/geth${NC}"
-    chmod +x $HOME/go/bin/geth
+    $HOME/go/bin/geth version
   else
     echo -e "${RED}Failed to install geth binary!${NC}"
     exit 1
@@ -750,21 +780,40 @@ install_node() {
   
   # Install Story
   echo -e "${YELLOW}Installing Story...${NC}"
-  cd $HOME
-  rm -rf story
-  git clone https://github.com/piplabs/story
-  cd story
-  git checkout $STORY_VERSION
-  go build -o story ./client
   
-  # Copy story binary and ensure it's executable
-  cp $HOME/story/story $HOME/go/bin/
+  # Attempt to use precompiled binary first
+  echo -e "${YELLOW}Downloading pre-compiled Story binary...${NC}"
+  wget -O $HOME/go/bin/story https://github.com/piplabs/story/releases/download/$STORY_VERSION/story
   chmod +x $HOME/go/bin/story
+  
+  # Check if binary was downloaded successfully
+  if [ ! -f "$HOME/go/bin/story" ] || ! $HOME/go/bin/story version &>/dev/null; then
+    echo -e "${YELLOW}Pre-compiled binary failed or not available. Building from source...${NC}"
+    
+    # Build from source as fallback
+    cd $HOME
+    rm -rf story
+    git clone https://github.com/piplabs/story
+    cd story
+    git checkout $STORY_VERSION
+    
+    echo -e "${YELLOW}Building Story from source...${NC}"
+    go build -o story ./client
+    
+    if [ -f "story" ]; then
+      cp story $HOME/go/bin/
+      chmod +x $HOME/go/bin/story
+    else
+      echo -e "${RED}Failed to build Story binary!${NC}"
+      exit 1
+    fi
+  fi
   
   # Verify story installation
   echo -e "${YELLOW}Verifying story installation...${NC}"
-  if [ -f "$HOME/go/bin/story" ]; then
+  if $HOME/go/bin/story version &>/dev/null; then
     echo -e "${GREEN}Story binary installed at $HOME/go/bin/story${NC}"
+    $HOME/go/bin/story version
   else
     echo -e "${RED}Failed to install story binary!${NC}"
     exit 1
