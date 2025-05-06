@@ -670,46 +670,21 @@ install_node() {
   # Install Go if needed
   echo -e "${YELLOW}Checking and installing Go...${NC}"
   cd $HOME
-  if ! command -v go &> /dev/null; then
-    echo -e "${YELLOW}Installing Go $GO_VERSION...${NC}"
-    wget "https://golang.org/dl/go$GO_VERSION.linux-amd64.tar.gz"
-    sudo rm -rf /usr/local/go
-    sudo tar -C /usr/local -xzf "go$GO_VERSION.linux-amd64.tar.gz"
-    rm "go$GO_VERSION.linux-amd64.tar.gz"
-    
-    # Configure Go environment variables and apply them immediately
-    echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> $HOME/.profile
-    echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> $HOME/.bashrc
-    source $HOME/.profile
-    export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
-    
-    echo -e "${YELLOW}Verifying Go installation...${NC}"
-    # Force the path for this script execution
-    export PATH=/usr/local/go/bin:$HOME/go/bin:$PATH
-    
-    if ! command -v go &> /dev/null; then
-      echo -e "${RED}Go was installed but not found in PATH. Using absolute path...${NC}"
-      GO_BIN="/usr/local/go/bin/go"
-    else
-      GO_BIN="go"
-      go version
-    fi
-  else
-    GO_BIN="go"
-  fi
-  
-  # Create go/bin directory if it doesn't exist
-  mkdir -p $HOME/go/bin
+  VER="$GO_VERSION"
+  wget "https://golang.org/dl/go$VER.linux-amd64.tar.gz"
+  sudo rm -rf /usr/local/go
+  sudo tar -C /usr/local -xzf "go$VER.linux-amd64.tar.gz"
+  rm "go$VER.linux-amd64.tar.gz"
+  [ ! -f ~/.bash_profile ] && touch ~/.bash_profile
+  echo "export PATH=$PATH:/usr/local/go/bin:~/go/bin" >> ~/.bash_profile
+  source $HOME/.bash_profile
+  [ ! -d ~/go/bin ] && mkdir -p ~/go/bin
   
   # Set variables
-  export MONIKER="$moniker"
-  export STORY_CHAIN_ID="aeneid"
-  export STORY_PORT="52"
-  
-  # Add to profile files
-  grep -q "export MONIKER=" $HOME/.bashrc || echo "export MONIKER=\"$moniker\"" >> $HOME/.bashrc
-  grep -q "export STORY_CHAIN_ID=" $HOME/.bashrc || echo "export STORY_CHAIN_ID=\"aeneid\"" >> $HOME/.bashrc
-  grep -q "export STORY_PORT=" $HOME/.bashrc || echo "export STORY_PORT=\"52\"" >> $HOME/.bashrc
+  echo "export MONIKER=\"$moniker\"" >> $HOME/.bash_profile
+  echo "export STORY_CHAIN_ID=\"aeneid\"" >> $HOME/.bash_profile
+  echo "export STORY_PORT=\"52\"" >> $HOME/.bash_profile
+  source $HOME/.bash_profile
   
   # Display environment for debugging
   echo -e "${YELLOW}Environment variables:${NC}"
@@ -720,161 +695,61 @@ install_node() {
   
   # Download and install Geth binaries
   echo -e "${YELLOW}Installing Story-Geth...${NC}"
-  mkdir -p $HOME/go/bin/
-  
-  # Attempt to use precompiled binary first
-  echo -e "${YELLOW}Downloading pre-compiled Geth binary...${NC}"
-  wget -O $HOME/go/bin/geth https://github.com/piplabs/story-geth/releases/download/$STORY_GETH_VERSION/geth
+  cd $HOME
+  rm -rf story-geth
+  git clone https://github.com/piplabs/story-geth.git
+  cd story-geth
+  git checkout $STORY_GETH_VERSION
+  make geth
+  cp build/bin/geth $HOME/go/bin/
   chmod +x $HOME/go/bin/geth
   
-  # Check if binary was downloaded successfully
-  if [ ! -f "$HOME/go/bin/geth" ] || ! $HOME/go/bin/geth version &>/dev/null; then
-    echo -e "${YELLOW}Pre-compiled binary failed or not available. Building from source...${NC}"
-    
-    # Build from source as fallback
-    cd $HOME
-    rm -rf story-geth
-    git clone https://github.com/piplabs/story-geth.git
-    cd story-geth
-    git checkout $STORY_GETH_VERSION
-    
-    echo -e "${YELLOW}Building Geth from source...${NC}"
-    make geth
-    
-    if [ -f "build/bin/geth" ]; then
-      cp build/bin/geth $HOME/go/bin/
-      chmod +x $HOME/go/bin/geth
-    else
-      echo -e "${RED}Failed to build Geth binary!${NC}"
-      exit 1
-    fi
-  fi
-  
-  # Verify geth installation
-  echo -e "${YELLOW}Verifying geth installation...${NC}"
-  if $HOME/go/bin/geth version &>/dev/null; then
-    echo -e "${GREEN}Geth binary installed at $HOME/go/bin/geth${NC}"
-    $HOME/go/bin/geth version
-  else
-    echo -e "${RED}Failed to install geth binary!${NC}"
-    exit 1
-  fi
+  # Create necessary directories
+  [ ! -d "$HOME/.story/story" ] && mkdir -p "$HOME/.story/story"
+  [ ! -d "$HOME/.story/geth" ] && mkdir -p "$HOME/.story/geth"
   
   # Install Story
   echo -e "${YELLOW}Installing Story...${NC}"
-  
-  # Attempt to use precompiled binary first
-  echo -e "${YELLOW}Downloading pre-compiled Story binary...${NC}"
-  wget -O $HOME/go/bin/story https://github.com/piplabs/story/releases/download/$STORY_VERSION/story
+  cd $HOME
+  rm -rf story
+  git clone https://github.com/piplabs/story
+  cd story
+  git checkout $STORY_VERSION
+  go build -o story ./client
+  mkdir -p $HOME/go/bin/
+  cp $HOME/story/story $HOME/go/bin/
   chmod +x $HOME/go/bin/story
-  
-  # Check if binary was downloaded successfully
-  if [ ! -f "$HOME/go/bin/story" ] || ! $HOME/go/bin/story version &>/dev/null; then
-    echo -e "${YELLOW}Pre-compiled binary failed or not available. Building from source...${NC}"
-    
-    # Build from source as fallback
-    cd $HOME
-    rm -rf story
-    git clone https://github.com/piplabs/story
-    cd story
-    git checkout $STORY_VERSION
-    
-    echo -e "${YELLOW}Building Story from source...${NC}"
-    $GO_BIN build -o story ./client
-    
-    if [ -f "story" ]; then
-      cp story $HOME/go/bin/
-      chmod +x $HOME/go/bin/story
-    else
-      echo -e "${RED}Failed to build Story binary!${NC}"
-      exit 1
-    fi
-  fi
-  
-  # Verify story installation
-  echo -e "${YELLOW}Verifying story installation...${NC}"
-  if $HOME/go/bin/story version &>/dev/null; then
-    echo -e "${GREEN}Story binary installed at $HOME/go/bin/story${NC}"
-    $HOME/go/bin/story version
-  else
-    echo -e "${RED}Failed to install story binary!${NC}"
-    exit 1
-  fi
-  
-  # Create necessary directories for Story
-  mkdir -p $HOME/.story/story
-  mkdir -p $HOME/.story/geth/aeneid/geth
   
   # Initialize Story application
   echo -e "${YELLOW}Initializing Story...${NC}"
   $HOME/go/bin/story init --moniker $MONIKER --network $STORY_CHAIN_ID
   
-  # Check if initialization was successful
-  if [ ! -f "$HOME/.story/story/config/genesis.json" ]; then
-    echo -e "${RED}Story initialization failed! Genesis file not created.${NC}"
-    echo -e "${YELLOW}Trying with absolute paths...${NC}"
-    $HOME/go/bin/story init --home=$HOME/.story/story --moniker $MONIKER --network $STORY_CHAIN_ID
-    
-    if [ ! -f "$HOME/.story/story/config/genesis.json" ]; then
-      echo -e "${RED}Failed to initialize Story. Exiting.${NC}"
-      exit 1
-    fi
-  fi
-  
-  # Create JWT secret for Geth authentication
-  echo -e "${YELLOW}Creating JWT secret for Geth...${NC}"
-  mkdir -p $HOME/.story/geth/aeneid/geth
-  openssl rand -hex 32 > $HOME/.story/geth/aeneid/geth/jwtsecret
-  
-  # Double-check the network setting in config files
-  echo -e "${YELLOW}Verifying network configuration...${NC}"
-  if [ -f "$HOME/.story/story/config/genesis.json" ]; then
-    if grep -q "devnet" $HOME/.story/story/config/genesis.json; then
-      echo -e "${RED}Warning: Network is set to devnet instead of aeneid in genesis.json!${NC}"
-      echo -e "${YELLOW}This is expected as the internal network ID is still devnet-1${NC}"
-    fi
-  else
-    echo -e "${RED}Warning: genesis.json file not found at $HOME/.story/story/config/genesis.json${NC}"
-  fi
-  
   # Configure seeds and peers
   echo -e "${YELLOW}Configuring peers and seeds...${NC}"
-  if [ -f "$HOME/.story/story/config/config.toml" ]; then
-    SEEDS="434af9dae402ab9f1c8a8fc15eae2d68b5be3387@story-testnet-seed.itrocket.net:29656"
-    PEERS="c2a6cc9b3fa468624b2683b54790eb339db45cbf@story-testnet-peer.itrocket.net:26656"
-    sed -i -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*seeds *=.*/seeds = \"$SEEDS\"/}" \
-           -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*persistent_peers *=.*/persistent_peers = \"$PEERS\"/}" $HOME/.story/story/config/config.toml
-  else
-    echo -e "${RED}Warning: config.toml file not found at $HOME/.story/story/config/config.toml${NC}"
-  fi
+  SEEDS="434af9dae402ab9f1c8a8fc15eae2d68b5be3387@story-testnet-seed.itrocket.net:29656"
+  PEERS="c2a6cc9b3fa468624b2683b54790eb339db45cbf@story-testnet-peer.itrocket.net:26656"
+  sed -i -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*seeds *=.*/seeds = \"$SEEDS\"/}" \
+         -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*persistent_peers *=.*/persistent_peers = \"$PEERS\"/}" $HOME/.story/story/config/config.toml
   
   # Configure custom ports in story.toml
   echo -e "${YELLOW}Configuring ports in story.toml...${NC}"
-  if [ -f "$HOME/.story/story/config/story.toml" ]; then
-    sed -i.bak -e "s%:1317%:${STORY_PORT}317%g;
+  sed -i.bak -e "s%:1317%:${STORY_PORT}317%g;
 s%:8551%:${STORY_PORT}551%g" $HOME/.story/story/config/story.toml
-  else
-    echo -e "${RED}Warning: story.toml file not found at $HOME/.story/story/config/story.toml${NC}"
-  fi
   
   # Configure custom ports in config.toml
   echo -e "${YELLOW}Configuring ports in config.toml...${NC}"
-  if [ -f "$HOME/.story/story/config/config.toml" ]; then
-    sed -i.bak -e "s%:26658%:${STORY_PORT}658%g;
+  sed -i.bak -e "s%:26658%:${STORY_PORT}658%g;
 s%:26657%:${STORY_PORT}657%g;
 s%:26656%:${STORY_PORT}656%g;
 s%^external_address = \"\"%external_address = \"$(wget -qO- eth0.me):${STORY_PORT}656\"%;
 s%:26660%:${STORY_PORT}660%g" $HOME/.story/story/config/config.toml
-    
-    # Enable prometheus and disable indexing
-    echo -e "${YELLOW}Configuring prometheus and indexing...${NC}"
-    sed -i -e "s/prometheus = false/prometheus = true/" $HOME/.story/story/config/config.toml
-    sed -i -e "s/^indexer *=.*/indexer = \"null\"/" $HOME/.story/story/config/config.toml
-  else
-    echo -e "${RED}Warning: config.toml file not found at $HOME/.story/story/config/config.toml${NC}"
-  fi
   
-  # Create Geth service file with absolute path to binary
+  # Enable prometheus and disable indexing
+  echo -e "${YELLOW}Configuring prometheus and indexing...${NC}"
+  sed -i -e "s/prometheus = false/prometheus = true/" $HOME/.story/story/config/config.toml
+  sed -i -e "s/^indexer *=.*/indexer = \"null\"/" $HOME/.story/story/config/config.toml
+  
+  # Create Geth service file
   echo -e "${YELLOW}Creating Geth service file...${NC}"
   sudo tee /etc/systemd/system/story-geth.service > /dev/null <<EOF
 [Unit]
@@ -883,7 +758,7 @@ After=network-online.target
 
 [Service]
 User=$USER
-ExecStart=$HOME/go/bin/geth --aeneid --syncmode full --authrpc.jwtsecret=$HOME/.story/geth/aeneid/geth/jwtsecret --http --http.api eth,net,web3,engine --http.vhosts '*' --http.addr 0.0.0.0 --http.port ${STORY_PORT}545 --authrpc.port ${STORY_PORT}551 --ws --ws.api eth,web3,net,txpool --ws.addr 0.0.0.0 --ws.port ${STORY_PORT}546
+ExecStart=$HOME/go/bin/geth --aeneid --syncmode full --http --http.api eth,net,web3,engine --http.vhosts '*' --http.addr 0.0.0.0 --http.port ${STORY_PORT}545 --authrpc.port ${STORY_PORT}551 --ws --ws.api eth,web3,net,txpool --ws.addr 0.0.0.0 --ws.port ${STORY_PORT}546
 Restart=on-failure
 RestartSec=3
 LimitNOFILE=65535
@@ -892,7 +767,7 @@ LimitNOFILE=65535
 WantedBy=multi-user.target
 EOF
   
-  # Create Story service file with absolute path to binary
+  # Create Story service file
   echo -e "${YELLOW}Creating Story service file...${NC}"
   sudo tee /etc/systemd/system/story.service > /dev/null <<EOF
 [Unit]
@@ -902,8 +777,7 @@ After=network.target
 [Service]
 User=$USER
 WorkingDirectory=$HOME/.story/story
-ExecStart=$HOME/go/bin/story run
-Environment="PATH=/usr/local/go/bin:$HOME/go/bin:$PATH"
+ExecStart=$(which story) run
 
 Restart=on-failure
 RestartSec=5
