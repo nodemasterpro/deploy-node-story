@@ -158,21 +158,21 @@ restart_services() {
 
 # Function to display logs
 show_logs() {
-  echo -e "${BLUE}Affichage des logs en temps réel (Ctrl+C pour quitter)...${NC}"
+  echo -e "${BLUE}Displaying real-time logs (Ctrl+C to exit)...${NC}"
   
-  echo -e "${YELLOW}Affichage des logs des deux services (Geth et Story):${NC}"
+  echo -e "${YELLOW}Displaying logs for both services (Geth and Story):${NC}"
   journalctl -u $GETH_SERVICE -u $STORY_SERVICE -f -o cat
 }
 
 # Function to display Geth logs
 show_logs_geth() {
-  echo -e "${YELLOW}$GETH_SERVICE logs en temps réel (Ctrl+C pour quitter):${NC}"
+  echo -e "${YELLOW}$GETH_SERVICE real-time logs (Ctrl+C to exit):${NC}"
   journalctl -u $GETH_SERVICE -f -o cat
 }
 
 # Function to display Story logs
 show_logs_story() {
-  echo -e "${YELLOW}$STORY_SERVICE logs en temps réel (Ctrl+C pour quitter):${NC}"
+  echo -e "${YELLOW}$STORY_SERVICE real-time logs (Ctrl+C to exit):${NC}"
   journalctl -u $STORY_SERVICE -f -o cat
 }
 
@@ -635,7 +635,7 @@ import_snapshots() {
   rm -rf $HOME/.story/story/data
   
   echo -e "${YELLOW}Downloading and extracting Story snapshot...${NC}"
-  curl -s ${SNAPSHOT_BASE_URL}${STORY_SNAPSHOT} | lz4 -dc - | tar -xf - -C $HOME/.story/story
+  curl -s ${SNAPSHOT_BASE_URL}${STORY_SNAPSHOT} | lz4 -dc - | tar -xf - -C $HOME/.story/story 2>/dev/null
   
   # Restore priv_validator_state.json
   if [ -f "$HOME/.story/story/priv_validator_state.json.backup" ]; then
@@ -649,7 +649,7 @@ import_snapshots() {
   mkdir -p $HOME/.story/geth/aeneid/geth
   
   echo -e "${YELLOW}Downloading and extracting Geth snapshot...${NC}"
-  curl -s ${SNAPSHOT_BASE_URL}${GETH_SNAPSHOT} | lz4 -dc - | tar -xf - -C $HOME/.story/geth/aeneid/geth
+  curl -s ${SNAPSHOT_BASE_URL}${GETH_SNAPSHOT} | lz4 -dc - | tar -xf - -C $HOME/.story/geth/aeneid/geth 2>/dev/null
   
   echo -e "${GREEN}Snapshots imported successfully!${NC}"
 }
@@ -674,7 +674,7 @@ install_node() {
   VER="$GO_VERSION"
   wget "https://golang.org/dl/go$VER.linux-amd64.tar.gz"
   sudo rm -rf /usr/local/go
-  sudo tar -C /usr/local -xzf "go$VER.linux-amd64.tar.gz"
+  sudo tar -C /usr/local -xzf "go$VER.linux-amd64.tar.gz" 2>/dev/null
   rm "go$VER.linux-amd64.tar.gz"
   [ ! -f ~/.bash_profile ] && touch ~/.bash_profile
   echo "export PATH=$PATH:/usr/local/go/bin:~/go/bin" >> ~/.bash_profile
@@ -816,143 +816,83 @@ register_validator() {
     exit 1
   fi
   
-  # Export validator key
-  echo -e "${YELLOW}Exporting validator key...${NC}"
-  $HOME/go/bin/story validator export
+  # Get moniker from the config file correctly
+  MONIKER=$(grep -E "^moniker[ ]*=" $HOME/.story/story/config/config.toml | sed -E 's/moniker[ ]*=[ ]*"([^"]*)"/\1/')
   
-  # Export EVM key
-  echo -e "${YELLOW}Exporting EVM key...${NC}"
-  $HOME/go/bin/story validator export --export-evm-key
+  if [ -z "$MONIKER" ]; then
+    MONIKER="validator"
+  fi
   
-  # Wait for the file to be created
-  echo -e "${YELLOW}Waiting for private key file to be generated...${NC}"
-  sleep 2
+  # Ask if user wants to use a different moniker
+  read -p "Current moniker: $MONIKER. Do you want to use a different name? (y/N) " change_moniker
+  if [[ $change_moniker == [yY] || $change_moniker == [yY][eE][sS] ]]; then
+    read -p "Enter new moniker: " new_moniker
+    if [ ! -z "$new_moniker" ]; then
+      MONIKER=$new_moniker
+    fi
+  fi
   
-  # Check if private key file was created
-  if [ ! -f "$EVM_KEY_PATH" ]; then
-    # Try to export again with explicit path
-    echo -e "${YELLOW}Trying alternative export method...${NC}"
-    mkdir -p $(dirname "$EVM_KEY_PATH")
-    $HOME/go/bin/story validator export --export-evm-key --export-evm-key-path "$EVM_KEY_PATH"
+  # Export validator key and get addresses
+  VALIDATOR_INFO=$($HOME/go/bin/story validator export)
+  VALOPER_ADDRESS=$(echo "$VALIDATOR_INFO" | grep "Validator Address:" | awk '{print $3}')
+  EVM_ADDRESS=$(echo "$VALIDATOR_INFO" | grep "EVM Address:" | awk '{print $3}')
+  
+  # Fixed values for the validator
+  local stake_amount="1024000000000000000000"
+  local commission_rate="700"
+  local rpc_endpoint="https://aeneid.storyrpc.io"
+  local unlocked="false"
+  
+  echo -e "${YELLOW}Validator will be created with the following parameters:${NC}"
+  echo -e "Stake amount: $stake_amount"
+  echo -e "Commission rate: $commission_rate bips (7%)"
+  echo -e "RPC endpoint: $rpc_endpoint"
+  echo -e "Unlocked tokens: $unlocked"
+  echo -e "Moniker: $MONIKER"
+  
+  # Create .env file if needed
+  if [ -f "$HOME/.story/story/config/private_key.txt" ]; then
+    echo -e "${YELLOW}Creating .env file for validator operations...${NC}"
+    PRIVATE_KEY=$(cat $HOME/.story/story/config/private_key.txt | grep "PRIVATE_KEY" | awk -F'=' '{print $2}')
+    # Place .env in the same directory as the story binary
+    echo "PRIVATE_KEY=$PRIVATE_KEY" > $HOME/go/bin/.env
+    echo -e "${GREEN}Created .env file in $HOME/go/bin/.env with your private key${NC}"
+  else
+    echo -e "${YELLOW}Exporting EVM key...${NC}"
+    $HOME/go/bin/story validator export --export-evm-key
+    
+    # Wait for file creation
     sleep 2
     
-    # Check again if file exists
-    if [ ! -f "$EVM_KEY_PATH" ]; then
-      echo -e "${RED}Error: Failed to generate EVM key at $EVM_KEY_PATH${NC}"
-      echo -e "${YELLOW}Creating a placeholder file. You may need to manually export your key.${NC}"
-      
-      # Extract private key from logs or validator key
-      PUB_KEY=$($HOME/go/bin/story validator export | grep "PUB_KEY" | cut -d'=' -f2)
-      echo "PRIVATE_KEY=key_not_available_please_export_manually" > "$EVM_KEY_PATH"
-      echo "PUBLIC_KEY=$PUB_KEY" >> "$EVM_KEY_PATH"
-    fi
-  fi
-  
-  # Display EVM key
-  echo -e "${YELLOW}EVM private key:${NC}"
-  cat $HOME/.story/story/config/private_key.txt
-  
-  # Display information about validator creation
-  echo -e "${GREEN}To register your node as a validator, follow these steps:${NC}"
-  echo -e "1. Import your EVM private key (located at $EVM_KEY_PATH) into your MetaMask or Phantom wallet."
-  echo -e "2. Add the Aeneid testnet to your wallet via faucet."
-  echo -e "3. Copy your 'EVM address' from the wallet and request \$IP tokens via the faucet."
-  echo -e "4. Verify that your node is fully synchronized."
-  
-  # Create validator
-  read -p "Do you want to create the validator now? (y/N) " create_validator
-  if [[ $create_validator == [yY] || $create_validator == [yY][eE][sS] ]]; then
-    read -p "Enter amount to stake (default: 1024000000000000000000): " stake_amount
-    stake_amount=${stake_amount:-1024000000000000000000}
-    read -p "Enter RPC endpoint (default: https://aeneid.storyrpc.io): " rpc_endpoint
-    rpc_endpoint=${rpc_endpoint:-https://aeneid.storyrpc.io}
-    
-    echo -e "${YELLOW}Creating validator...${NC}"
-    $HOME/go/bin/story validator create \
-      --stake $stake_amount \
-      --moniker $MONIKER \
-      --chain-id 1315 \
-      --rpc "$rpc_endpoint" \
-      --private-key $(cat $HOME/.story/story/config/private_key.txt | grep "PRIVATE_KEY" | awk -F'=' '{print $2}')
-    
-    echo -e "${GREEN}Validator created successfully!${NC}"
-  else
-    echo -e "${YELLOW}To create your validator later, use the following command:${NC}"
-    echo -e "$HOME/go/bin/story validator create \\"
-    echo -e "  --stake 1024000000000000000000 \\"
-    echo -e "  --moniker $MONIKER \\"
-    echo -e "  --rpc \"https://aeneid.storyrpc.io\" \\"
-    echo -e "  --chain-id 1315 \\"
-    echo -e "  --private-key \$(cat $HOME/.story/story/config/private_key.txt | grep \"PRIVATE_KEY\" | awk -F'=' '{print \$2}')"
-  fi
-  
-  # Save validator key
-  echo -e "${YELLOW}Don't forget to backup your validator key:${NC}"
-  echo -e "cat $HOME/.story/story/config/priv_validator_key.json"
-  
-  # Backup keys automatically
-  backup_keys
-  
-  # Check validator address
-  VALIDATOR_ADDRESS=$($HOME/go/bin/story validator address)
-  echo -e "${GREEN}Your validator address: ${VALIDATOR_ADDRESS}${NC}"
-  echo -e "You can verify your validator on the Story explorer by searching for this address."
-}
-
-# New function to export validator keys
-export_validator_key() {
-  echo -e "${BLUE}Exporting validator keys...${NC}"
-  
-  # Check if validator key exists
-  if [ ! -f "$HOME/.story/story/config/priv_validator_key.json" ]; then
-    echo -e "${RED}Error: Validator key not found! Have you initialized your node?${NC}"
-    exit 1
-  fi
-  
-  # Export validator key details
-  echo -e "${YELLOW}Validator key details:${NC}"
-  $HOME/go/bin/story validator export
-  
-  # Export EVM private key
-  echo -e "${YELLOW}Exporting EVM private key...${NC}"
-  $HOME/go/bin/story validator export --export-evm-key
-  
-  # Wait for file creation
-  sleep 2
-  
-  # Check if EVM key was exported
-  if [ -f "$EVM_KEY_PATH" ]; then
-    echo -e "${GREEN}EVM key exported successfully to:${NC} $EVM_KEY_PATH"
-    echo -e "${YELLOW}EVM private key:${NC}"
-    cat $EVM_KEY_PATH
-  else
-    echo -e "${RED}Error: Failed to export EVM key to $EVM_KEY_PATH${NC}"
-    echo -e "${YELLOW}Trying alternative export method...${NC}"
-    mkdir -p $(dirname "$EVM_KEY_PATH")
-    $HOME/go/bin/story validator export --export-evm-key --export-evm-key-path "$EVM_KEY_PATH"
-    
-    # Check again
-    if [ -f "$EVM_KEY_PATH" ]; then
-      echo -e "${GREEN}EVM key exported successfully to:${NC} $EVM_KEY_PATH"
-      echo -e "${YELLOW}EVM private key:${NC}"
-      cat $EVM_KEY_PATH
+    if [ -f "$HOME/.story/story/config/private_key.txt" ]; then
+      echo -e "${YELLOW}Creating .env file for validator operations...${NC}"
+      PRIVATE_KEY=$(cat $HOME/.story/story/config/private_key.txt | grep "PRIVATE_KEY" | awk -F'=' '{print $2}')
+      # Place .env in the same directory as the story binary
+      echo "PRIVATE_KEY=$PRIVATE_KEY" > $HOME/go/bin/.env
+      echo -e "${GREEN}Created .env file in $HOME/go/bin/.env with your private key${NC}"
     else
-      echo -e "${RED}Failed to export EVM key automatically.${NC}"
-      echo -e "${YELLOW}Try manually with:${NC} $HOME/go/bin/story validator export --export-evm-key"
+      echo -e "${RED}Error: Could not export EVM key.${NC}"
+      exit 1
     fi
   fi
   
-  # Display additional information about the keys
-  echo -e "\n${YELLOW}Important information:${NC}"
-  echo -e "1. Your validator key is in: $VALIDATOR_KEY_PATH"
-  echo -e "2. Your EVM private key is in: $EVM_KEY_PATH"
-  echo -e "3. Back up these files securely to avoid losing access to your validator."
-  echo -e "4. To import your EVM key to MetaMask, use the private key value (without the 'PRIVATE_KEY=' prefix)."
-  echo -e "5. Use this private key to create or manage your validator."
+  # Complete command to create the validator
+  CREATE_CMD="$HOME/go/bin/story validator create --stake $stake_amount --moniker \"$MONIKER\" --rpc $rpc_endpoint --chain-id 1315 --commission-rate $commission_rate --unlocked=$unlocked"
   
-  # Backup keys
-  echo -e "\n${YELLOW}Creating a backup of your keys...${NC}"
-  backup_keys
+  echo -e "${YELLOW}Executing validator creation command:${NC}"
+  echo -e "$CREATE_CMD"
+  
+  # Execute the command directly without asking for confirmation
+  cd $HOME/go/bin
+  story validator create --stake "$stake_amount" --moniker "$MONIKER" --rpc "$rpc_endpoint" --chain-id 1315 --commission-rate "$commission_rate" --unlocked="$unlocked"
+  
+  # Display important information
+  echo -e "\n${GREEN}Important information:${NC}"
+  echo -e "Validator address: ${VALOPER_ADDRESS}"
+  echo -e "EVM address: ${EVM_ADDRESS}"
+  echo -e "\n${YELLOW}Note: If you don't have enough funds, the transaction will fail. This is normal if you haven't funded your account yet.${NC}"
+  echo -e "${YELLOW}You can check if your validator is in the active set with:${NC}"
+  echo -e "curl https://aeneid.storyrpc.io/validators | jq ."
 }
 
 # Function to remove the node
@@ -1028,7 +968,7 @@ backup_keys() {
   fi
   
   # Create backup archive
-  tar -czf "$BACKUP_DIR/story_keys_backup.tar.gz" "${files_to_backup[@]}"
+  tar -czf "$BACKUP_DIR/story_keys_backup.tar.gz" "${files_to_backup[@]}" 2>/dev/null
   
   echo -e "${GREEN}Backup created at $BACKUP_DIR/story_keys_backup.tar.gz${NC}"
   echo -e "This backup contains:"
@@ -1062,7 +1002,7 @@ restore_keys() {
   
   # Extract keys
   echo -e "${YELLOW}Extracting keys...${NC}"
-  tar -xzf "$BACKUP_DIR/story_keys_backup.tar.gz" -C /
+  tar -xzf "$BACKUP_DIR/story_keys_backup.tar.gz" -C / 2>/dev/null
   
   # Check permissions
   echo -e "${YELLOW}Checking permissions...${NC}"
@@ -1129,8 +1069,6 @@ update_snapshots() {
   if [ -f "$HOME/.story/story/data/priv_validator_state.json" ]; then
     echo -e "${YELLOW}Backing up priv_validator_state.json...${NC}"
     cp $HOME/.story/story/data/priv_validator_state.json $HOME/.story/story/priv_validator_state.json.backup
-  else
-    echo -e "${YELLOW}Warning: priv_validator_state.json not found. If you're a validator, this may cause issues.${NC}"
   fi
   
   # Remove old data and extract Story snapshot
@@ -1138,7 +1076,7 @@ update_snapshots() {
   rm -rf $HOME/.story/story/data
   
   echo -e "${YELLOW}Downloading and extracting Story snapshot...${NC}"
-  curl -s ${SNAPSHOT_BASE_URL}${STORY_SNAPSHOT} | lz4 -dc - | tar -xf - -C $HOME/.story/story
+  curl -s ${SNAPSHOT_BASE_URL}${STORY_SNAPSHOT} | lz4 -dc - | tar -xf - -C $HOME/.story/story 2>/dev/null
   
   # Restore priv_validator_state.json
   if [ -f "$HOME/.story/story/priv_validator_state.json.backup" ]; then
@@ -1152,7 +1090,7 @@ update_snapshots() {
   mkdir -p $HOME/.story/geth/aeneid/geth
   
   echo -e "${YELLOW}Downloading and extracting Geth snapshot...${NC}"
-  curl -s ${SNAPSHOT_BASE_URL}${GETH_SNAPSHOT} | lz4 -dc - | tar -xf - -C $HOME/.story/geth/aeneid/geth
+  curl -s ${SNAPSHOT_BASE_URL}${GETH_SNAPSHOT} | lz4 -dc - | tar -xf - -C $HOME/.story/geth/aeneid/geth 2>/dev/null
   
   # Restart services
   echo -e "${YELLOW}Enabling and restarting services...${NC}"
