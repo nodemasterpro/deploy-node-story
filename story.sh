@@ -665,18 +665,59 @@ install_node() {
     sudo rm -rf /usr/local/go
     sudo tar -C /usr/local -xzf "go$GO_VERSION.linux-amd64.tar.gz"
     rm "go$GO_VERSION.linux-amd64.tar.gz"
+    
+    # Configure Go environment variables and apply them immediately
+    export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+    
+    echo -e "${YELLOW}Verifying Go installation...${NC}"
+    if ! command -v go &> /dev/null; then
+      echo -e "${RED}Go was installed but not found in PATH. Adding to current session...${NC}"
+      export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+    fi
+    go version
   fi
   
-  # Configure environment variables
-  [ ! -f ~/.bash_profile ] && touch ~/.bash_profile
-  grep -q "PATH=.*:/usr/local/go/bin:~/go/bin" ~/.bash_profile || echo "export PATH=\$PATH:/usr/local/go/bin:~/go/bin" >> ~/.bash_profile
-  [ ! -d ~/go/bin ] && mkdir -p ~/go/bin
+  # Configure environment variables in .bash_profile and apply them to current session
+  echo -e "${YELLOW}Configuring environment variables...${NC}"
+  [ ! -f $HOME/.bash_profile ] && touch $HOME/.bash_profile
+  
+  # Update PATH in profile files to include Go
+  if ! grep -q "export PATH=.*:/usr/local/go/bin" $HOME/.bash_profile; then
+    echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> $HOME/.bash_profile
+  fi
+  
+  # Export PATH for current session
+  export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+  
+  # Create go/bin directory if it doesn't exist
+  mkdir -p $HOME/go/bin
   
   # Set variables
-  grep -q "export MONIKER=" ~/.bash_profile || echo "export MONIKER=\"$moniker\"" >> ~/.bash_profile
-  grep -q "export STORY_CHAIN_ID=" ~/.bash_profile || echo "export STORY_CHAIN_ID=\"aeneid\"" >> ~/.bash_profile
-  grep -q "export STORY_PORT=" ~/.bash_profile || echo "export STORY_PORT=\"52\"" >> ~/.bash_profile
-  source ~/.bash_profile
+  if ! grep -q "export MONIKER=" $HOME/.bash_profile; then
+    echo "export MONIKER=\"$moniker\"" >> $HOME/.bash_profile
+  else
+    sed -i "s/export MONIKER=.*/export MONIKER=\"$moniker\"/" $HOME/.bash_profile
+  fi
+  
+  if ! grep -q "export STORY_CHAIN_ID=" $HOME/.bash_profile; then
+    echo "export STORY_CHAIN_ID=\"aeneid\"" >> $HOME/.bash_profile
+  fi
+  
+  if ! grep -q "export STORY_PORT=" $HOME/.bash_profile; then
+    echo "export STORY_PORT=\"52\"" >> $HOME/.bash_profile
+  fi
+  
+  # Apply variables to current session
+  export MONIKER="$moniker"
+  export STORY_CHAIN_ID="aeneid"
+  export STORY_PORT="52"
+  
+  # Display environment for debugging
+  echo -e "${YELLOW}Environment variables:${NC}"
+  echo "PATH=$PATH"
+  echo "MONIKER=$MONIKER"
+  echo "STORY_CHAIN_ID=$STORY_CHAIN_ID"
+  echo "STORY_PORT=$STORY_PORT"
   
   # Download and install Geth binaries
   echo -e "${YELLOW}Installing Story-Geth...${NC}"
@@ -686,9 +727,26 @@ install_node() {
   cd story-geth
   git checkout $STORY_GETH_VERSION
   make geth
-  mv build/bin/geth $HOME/go/bin/
+  
+  # Ensure destination directory exists and copy geth
+  mkdir -p $HOME/go/bin/
+  cp build/bin/geth $HOME/go/bin/
+  
+  # Verify geth installation
+  echo -e "${YELLOW}Verifying geth installation...${NC}"
+  if [ -f "$HOME/go/bin/geth" ]; then
+    echo -e "${GREEN}Geth binary installed at $HOME/go/bin/geth${NC}"
+    chmod +x $HOME/go/bin/geth
+  else
+    echo -e "${RED}Failed to install geth binary!${NC}"
+    exit 1
+  fi
+  
+  # Create necessary directories
   [ ! -d "$HOME/.story/story" ] && mkdir -p "$HOME/.story/story"
   [ ! -d "$HOME/.story/geth" ] && mkdir -p "$HOME/.story/geth"
+  [ ! -d "$HOME/.story/geth/aeneid" ] && mkdir -p "$HOME/.story/geth/aeneid"
+  [ ! -d "$HOME/.story/geth/aeneid/geth" ] && mkdir -p "$HOME/.story/geth/aeneid/geth"
   
   # Install Story
   echo -e "${YELLOW}Installing Story...${NC}"
@@ -698,21 +756,34 @@ install_node() {
   cd story
   git checkout $STORY_VERSION
   go build -o story ./client
-  mkdir -p $HOME/go/bin/
-  mv $HOME/story/story $HOME/go/bin/
+  
+  # Copy story binary and ensure it's executable
+  cp $HOME/story/story $HOME/go/bin/
+  chmod +x $HOME/go/bin/story
+  
+  # Verify story installation
+  echo -e "${YELLOW}Verifying story installation...${NC}"
+  if [ -f "$HOME/go/bin/story" ]; then
+    echo -e "${GREEN}Story binary installed at $HOME/go/bin/story${NC}"
+  else
+    echo -e "${RED}Failed to install story binary!${NC}"
+    exit 1
+  fi
   
   # Initialize Story application
   echo -e "${YELLOW}Initializing Story...${NC}"
   $HOME/go/bin/story init --moniker $MONIKER --network $STORY_CHAIN_ID
   
+  # Create JWT secret for Geth authentication
+  echo -e "${YELLOW}Creating JWT secret for Geth...${NC}"
+  openssl rand -hex 32 > $HOME/.story/geth/aeneid/geth/jwtsecret
+  
   # Double-check the network setting in config files
   echo -e "${YELLOW}Verifying network configuration...${NC}"
   # Check if the network is correctly set to aeneid in config.toml or genesis.json
   if grep -q "devnet" $HOME/.story/story/config/genesis.json; then
-    echo -e "${RED}Warning: Network is set to devnet instead of aeneid!${NC}"
-    echo -e "${YELLOW}Fixing network configuration...${NC}"
-    # Reinitialize with the correct network
-    $HOME/go/bin/story init --moniker $MONIKER --network aeneid --force
+    echo -e "${RED}Warning: Network is set to devnet instead of aeneid in genesis.json!${NC}"
+    echo -e "${YELLOW}This is expected as the internal network ID is still devnet-1${NC}"
   fi
   
   # Configure seeds and peers
@@ -725,22 +796,22 @@ install_node() {
   # Configure custom ports in story.toml
   echo -e "${YELLOW}Configuring ports in story.toml...${NC}"
   sed -i.bak -e "s%:1317%:${STORY_PORT}317%g;
-  s%:8551%:${STORY_PORT}551%g" $HOME/.story/story/config/story.toml
+s%:8551%:${STORY_PORT}551%g" $HOME/.story/story/config/story.toml
   
   # Configure custom ports in config.toml
   echo -e "${YELLOW}Configuring ports in config.toml...${NC}"
   sed -i.bak -e "s%:26658%:${STORY_PORT}658%g;
-  s%:26657%:${STORY_PORT}657%g;
-  s%:26656%:${STORY_PORT}656%g;
-  s%^external_address = \"\"%external_address = \"$(wget -qO- eth0.me):${STORY_PORT}656\"%;
-  s%:26660%:${STORY_PORT}660%g" $HOME/.story/story/config/config.toml
+s%:26657%:${STORY_PORT}657%g;
+s%:26656%:${STORY_PORT}656%g;
+s%^external_address = \"\"%external_address = \"$(wget -qO- eth0.me):${STORY_PORT}656\"%;
+s%:26660%:${STORY_PORT}660%g" $HOME/.story/story/config/config.toml
   
   # Enable prometheus and disable indexing
   echo -e "${YELLOW}Configuring prometheus and indexing...${NC}"
   sed -i -e "s/prometheus = false/prometheus = true/" $HOME/.story/story/config/config.toml
   sed -i -e "s/^indexer *=.*/indexer = \"null\"/" $HOME/.story/story/config/config.toml
   
-  # Create Geth service file
+  # Create Geth service file with absolute path to binary
   echo -e "${YELLOW}Creating Geth service file...${NC}"
   sudo tee /etc/systemd/system/story-geth.service > /dev/null <<EOF
 [Unit]
@@ -749,7 +820,7 @@ After=network-online.target
 
 [Service]
 User=$USER
-ExecStart=$HOME/go/bin/geth --aeneid --syncmode full --http --http.api eth,net,web3,engine --http.vhosts '*' --http.addr 0.0.0.0 --http.port ${STORY_PORT}545 --authrpc.port ${STORY_PORT}551 --ws --ws.api eth,web3,net,txpool --ws.addr 0.0.0.0 --ws.port ${STORY_PORT}546
+ExecStart=$HOME/go/bin/geth --aeneid --syncmode full --authrpc.jwtsecret=$HOME/.story/geth/aeneid/geth/jwtsecret --http --http.api eth,net,web3,engine --http.vhosts '*' --http.addr 0.0.0.0 --http.port ${STORY_PORT}545 --authrpc.port ${STORY_PORT}551 --ws --ws.api eth,web3,net,txpool --ws.addr 0.0.0.0 --ws.port ${STORY_PORT}546
 Restart=on-failure
 RestartSec=3
 LimitNOFILE=65535
@@ -758,7 +829,7 @@ LimitNOFILE=65535
 WantedBy=multi-user.target
 EOF
   
-  # Create Story service file
+  # Create Story service file with absolute path to binary
   echo -e "${YELLOW}Creating Story service file...${NC}"
   sudo tee /etc/systemd/system/story.service > /dev/null <<EOF
 [Unit]
@@ -768,7 +839,8 @@ After=network.target
 [Service]
 User=$USER
 WorkingDirectory=$HOME/.story/story
-ExecStart=$(which story) run
+ExecStart=$HOME/go/bin/story run
+Environment="PATH=$PATH:/usr/local/go/bin:$HOME/go/bin"
 
 Restart=on-failure
 RestartSec=5
