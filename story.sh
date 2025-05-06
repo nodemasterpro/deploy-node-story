@@ -678,50 +678,38 @@ install_node() {
     rm "go$GO_VERSION.linux-amd64.tar.gz"
     
     # Configure Go environment variables and apply them immediately
+    echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> $HOME/.profile
+    echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> $HOME/.bashrc
+    source $HOME/.profile
     export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
     
     echo -e "${YELLOW}Verifying Go installation...${NC}"
+    # Force the path for this script execution
+    export PATH=/usr/local/go/bin:$HOME/go/bin:$PATH
+    
     if ! command -v go &> /dev/null; then
-      echo -e "${RED}Go was installed but not found in PATH. Adding to current session...${NC}"
-      export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+      echo -e "${RED}Go was installed but not found in PATH. Using absolute path...${NC}"
+      GO_BIN="/usr/local/go/bin/go"
+    else
+      GO_BIN="go"
+      go version
     fi
-    go version
+  else
+    GO_BIN="go"
   fi
-  
-  # Configure environment variables in .bash_profile and apply them to current session
-  echo -e "${YELLOW}Configuring environment variables...${NC}"
-  [ ! -f $HOME/.bash_profile ] && touch $HOME/.bash_profile
-  
-  # Update PATH in profile files to include Go
-  if ! grep -q "export PATH=.*:/usr/local/go/bin" $HOME/.bash_profile; then
-    echo 'export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin' >> $HOME/.bash_profile
-  fi
-  
-  # Export PATH for current session
-  export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
   
   # Create go/bin directory if it doesn't exist
   mkdir -p $HOME/go/bin
   
   # Set variables
-  if ! grep -q "export MONIKER=" $HOME/.bash_profile; then
-    echo "export MONIKER=\"$moniker\"" >> $HOME/.bash_profile
-  else
-    sed -i "s/export MONIKER=.*/export MONIKER=\"$moniker\"/" $HOME/.bash_profile
-  fi
-  
-  if ! grep -q "export STORY_CHAIN_ID=" $HOME/.bash_profile; then
-    echo "export STORY_CHAIN_ID=\"aeneid\"" >> $HOME/.bash_profile
-  fi
-  
-  if ! grep -q "export STORY_PORT=" $HOME/.bash_profile; then
-    echo "export STORY_PORT=\"52\"" >> $HOME/.bash_profile
-  fi
-  
-  # Apply variables to current session
   export MONIKER="$moniker"
   export STORY_CHAIN_ID="aeneid"
   export STORY_PORT="52"
+  
+  # Add to profile files
+  grep -q "export MONIKER=" $HOME/.bashrc || echo "export MONIKER=\"$moniker\"" >> $HOME/.bashrc
+  grep -q "export STORY_CHAIN_ID=" $HOME/.bashrc || echo "export STORY_CHAIN_ID=\"aeneid\"" >> $HOME/.bashrc
+  grep -q "export STORY_PORT=" $HOME/.bashrc || echo "export STORY_PORT=\"52\"" >> $HOME/.bashrc
   
   # Display environment for debugging
   echo -e "${YELLOW}Environment variables:${NC}"
@@ -772,12 +760,6 @@ install_node() {
     exit 1
   fi
   
-  # Create necessary directories
-  [ ! -d "$HOME/.story/story" ] && mkdir -p "$HOME/.story/story"
-  [ ! -d "$HOME/.story/geth" ] && mkdir -p "$HOME/.story/geth"
-  [ ! -d "$HOME/.story/geth/aeneid" ] && mkdir -p "$HOME/.story/geth/aeneid"
-  [ ! -d "$HOME/.story/geth/aeneid/geth" ] && mkdir -p "$HOME/.story/geth/aeneid/geth"
-  
   # Install Story
   echo -e "${YELLOW}Installing Story...${NC}"
   
@@ -798,7 +780,7 @@ install_node() {
     git checkout $STORY_VERSION
     
     echo -e "${YELLOW}Building Story from source...${NC}"
-    go build -o story ./client
+    $GO_BIN build -o story ./client
     
     if [ -f "story" ]; then
       cp story $HOME/go/bin/
@@ -819,46 +801,78 @@ install_node() {
     exit 1
   fi
   
+  # Create necessary directories for Story
+  mkdir -p $HOME/.story/story
+  mkdir -p $HOME/.story/geth/aeneid/geth
+  
   # Initialize Story application
   echo -e "${YELLOW}Initializing Story...${NC}"
   $HOME/go/bin/story init --moniker $MONIKER --network $STORY_CHAIN_ID
   
+  # Check if initialization was successful
+  if [ ! -f "$HOME/.story/story/config/genesis.json" ]; then
+    echo -e "${RED}Story initialization failed! Genesis file not created.${NC}"
+    echo -e "${YELLOW}Trying with absolute paths...${NC}"
+    $HOME/go/bin/story init --home=$HOME/.story/story --moniker $MONIKER --network $STORY_CHAIN_ID
+    
+    if [ ! -f "$HOME/.story/story/config/genesis.json" ]; then
+      echo -e "${RED}Failed to initialize Story. Exiting.${NC}"
+      exit 1
+    fi
+  fi
+  
   # Create JWT secret for Geth authentication
   echo -e "${YELLOW}Creating JWT secret for Geth...${NC}"
+  mkdir -p $HOME/.story/geth/aeneid/geth
   openssl rand -hex 32 > $HOME/.story/geth/aeneid/geth/jwtsecret
   
   # Double-check the network setting in config files
   echo -e "${YELLOW}Verifying network configuration...${NC}"
-  # Check if the network is correctly set to aeneid in config.toml or genesis.json
-  if grep -q "devnet" $HOME/.story/story/config/genesis.json; then
-    echo -e "${RED}Warning: Network is set to devnet instead of aeneid in genesis.json!${NC}"
-    echo -e "${YELLOW}This is expected as the internal network ID is still devnet-1${NC}"
+  if [ -f "$HOME/.story/story/config/genesis.json" ]; then
+    if grep -q "devnet" $HOME/.story/story/config/genesis.json; then
+      echo -e "${RED}Warning: Network is set to devnet instead of aeneid in genesis.json!${NC}"
+      echo -e "${YELLOW}This is expected as the internal network ID is still devnet-1${NC}"
+    fi
+  else
+    echo -e "${RED}Warning: genesis.json file not found at $HOME/.story/story/config/genesis.json${NC}"
   fi
   
   # Configure seeds and peers
   echo -e "${YELLOW}Configuring peers and seeds...${NC}"
-  SEEDS="434af9dae402ab9f1c8a8fc15eae2d68b5be3387@story-testnet-seed.itrocket.net:29656"
-  PEERS="c2a6cc9b3fa468624b2683b54790eb339db45cbf@story-testnet-peer.itrocket.net:26656"
-  sed -i -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*seeds *=.*/seeds = \"$SEEDS\"/}" \
-         -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*persistent_peers *=.*/persistent_peers = \"$PEERS\"/}" $HOME/.story/story/config/config.toml
+  if [ -f "$HOME/.story/story/config/config.toml" ]; then
+    SEEDS="434af9dae402ab9f1c8a8fc15eae2d68b5be3387@story-testnet-seed.itrocket.net:29656"
+    PEERS="c2a6cc9b3fa468624b2683b54790eb339db45cbf@story-testnet-peer.itrocket.net:26656"
+    sed -i -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*seeds *=.*/seeds = \"$SEEDS\"/}" \
+           -e "/^\[p2p\]/,/^\[/{s/^[[:space:]]*persistent_peers *=.*/persistent_peers = \"$PEERS\"/}" $HOME/.story/story/config/config.toml
+  else
+    echo -e "${RED}Warning: config.toml file not found at $HOME/.story/story/config/config.toml${NC}"
+  fi
   
   # Configure custom ports in story.toml
   echo -e "${YELLOW}Configuring ports in story.toml...${NC}"
-  sed -i.bak -e "s%:1317%:${STORY_PORT}317%g;
+  if [ -f "$HOME/.story/story/config/story.toml" ]; then
+    sed -i.bak -e "s%:1317%:${STORY_PORT}317%g;
 s%:8551%:${STORY_PORT}551%g" $HOME/.story/story/config/story.toml
+  else
+    echo -e "${RED}Warning: story.toml file not found at $HOME/.story/story/config/story.toml${NC}"
+  fi
   
   # Configure custom ports in config.toml
   echo -e "${YELLOW}Configuring ports in config.toml...${NC}"
-  sed -i.bak -e "s%:26658%:${STORY_PORT}658%g;
+  if [ -f "$HOME/.story/story/config/config.toml" ]; then
+    sed -i.bak -e "s%:26658%:${STORY_PORT}658%g;
 s%:26657%:${STORY_PORT}657%g;
 s%:26656%:${STORY_PORT}656%g;
 s%^external_address = \"\"%external_address = \"$(wget -qO- eth0.me):${STORY_PORT}656\"%;
 s%:26660%:${STORY_PORT}660%g" $HOME/.story/story/config/config.toml
-  
-  # Enable prometheus and disable indexing
-  echo -e "${YELLOW}Configuring prometheus and indexing...${NC}"
-  sed -i -e "s/prometheus = false/prometheus = true/" $HOME/.story/story/config/config.toml
-  sed -i -e "s/^indexer *=.*/indexer = \"null\"/" $HOME/.story/story/config/config.toml
+    
+    # Enable prometheus and disable indexing
+    echo -e "${YELLOW}Configuring prometheus and indexing...${NC}"
+    sed -i -e "s/prometheus = false/prometheus = true/" $HOME/.story/story/config/config.toml
+    sed -i -e "s/^indexer *=.*/indexer = \"null\"/" $HOME/.story/story/config/config.toml
+  else
+    echo -e "${RED}Warning: config.toml file not found at $HOME/.story/story/config/config.toml${NC}"
+  fi
   
   # Create Geth service file with absolute path to binary
   echo -e "${YELLOW}Creating Geth service file...${NC}"
@@ -889,7 +903,7 @@ After=network.target
 User=$USER
 WorkingDirectory=$HOME/.story/story
 ExecStart=$HOME/go/bin/story run
-Environment="PATH=$PATH:/usr/local/go/bin:$HOME/go/bin"
+Environment="PATH=/usr/local/go/bin:$HOME/go/bin:$PATH"
 
 Restart=on-failure
 RestartSec=5
