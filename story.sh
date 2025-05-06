@@ -233,14 +233,14 @@ check_sync() {
   # Check if geth.ipc exists
   if [ -S "$HOME/.story/geth/aeneid/geth.ipc" ]; then
     echo -e "${YELLOW}Geth sync status:${NC}"
-    GETH_SYNCING=$(geth --exec "eth.syncing" attach $HOME/.story/geth/aeneid/geth.ipc)
+    GETH_SYNCING=$($HOME/go/bin/geth --exec "eth.syncing" attach $HOME/.story/geth/aeneid/geth.ipc)
     
     if [ "$GETH_SYNCING" == "false" ]; then
-      BLOCK_NUMBER=$(geth --exec "eth.blockNumber" attach $HOME/.story/geth/aeneid/geth.ipc)
+      BLOCK_NUMBER=$($HOME/go/bin/geth --exec "eth.blockNumber" attach $HOME/.story/geth/aeneid/geth.ipc)
       echo -e "${GREEN}Geth is synchronized. Current block: $BLOCK_NUMBER${NC}"
     else
       echo -e "${YELLOW}Geth is still syncing:${NC}"
-      geth --exec "eth.syncing" attach $HOME/.story/geth/aeneid/geth.ipc
+      $HOME/go/bin/geth --exec "eth.syncing" attach $HOME/.story/geth/aeneid/geth.ipc
     fi
   else
     echo -e "${RED}Error: Geth IPC file not found. Is Geth running?${NC}"
@@ -347,17 +347,17 @@ show_info() {
     # Show Geth info
     if [ -S "$HOME/.story/geth/aeneid/geth.ipc" ]; then
       echo -e "\n${GREEN}Geth information:${NC}"
-      echo -e "Block number: $(geth --exec "eth.blockNumber" attach $HOME/.story/geth/aeneid/geth.ipc 2>/dev/null || echo "Error fetching block number")"
-      echo -e "Syncing: $(geth --exec "eth.syncing" attach $HOME/.story/geth/aeneid/geth.ipc 2>/dev/null || echo "Error fetching sync status")"
-      echo -e "Network ID: $(geth --exec "net.version" attach $HOME/.story/geth/aeneid/geth.ipc 2>/dev/null || echo "Error fetching network ID")"
-      echo -e "Peer count: $(geth --exec "net.peerCount" attach $HOME/.story/geth/aeneid/geth.ipc 2>/dev/null || echo "Error fetching peer count")"
+      echo -e "Block number: $($HOME/go/bin/geth --exec "eth.blockNumber" attach $HOME/.story/geth/aeneid/geth.ipc 2>/dev/null || echo "Error fetching block number")"
+      echo -e "Syncing: $($HOME/go/bin/geth --exec "eth.syncing" attach $HOME/.story/geth/aeneid/geth.ipc 2>/dev/null || echo "Error fetching sync status")"
+      echo -e "Network ID: $($HOME/go/bin/geth --exec "net.version" attach $HOME/.story/geth/aeneid/geth.ipc 2>/dev/null || echo "Error fetching network ID")"
+      echo -e "Peer count: $($HOME/go/bin/geth --exec "net.peerCount" attach $HOME/.story/geth/aeneid/geth.ipc 2>/dev/null || echo "Error fetching peer count")"
     else
       echo -e "\n${RED}Geth IPC file not found at $HOME/.story/geth/aeneid/geth.ipc${NC}"
       echo -e "${YELLOW}Check if Geth is running and the correct network (aeneid) is configured.${NC}"
     fi
     
     # Get validator address and EVM address
-    if [ -x "$(command -v $HOME/go/bin/story)" ]; then
+    if [ -x "$HOME/go/bin/story" ]; then
       if [ -f "$HOME/.story/story/config/priv_validator_key.json" ]; then
         echo -e "\n${GREEN}Validator key information:${NC}"
         VALIDATOR_EXPORT=$($HOME/go/bin/story validator export 2>/dev/null)
@@ -375,7 +375,7 @@ show_info() {
             
             # Check validator balance if geth is running
             if [ -S "$HOME/.story/geth/aeneid/geth.ipc" ]; then
-              BALANCE=$(geth --exec "web3.fromWei(eth.getBalance('$EVM_ADDRESS'), 'ether')" attach $HOME/.story/geth/aeneid/geth.ipc 2>/dev/null)
+              BALANCE=$($HOME/go/bin/geth --exec "web3.fromWei(eth.getBalance('$EVM_ADDRESS'), 'ether')" attach $HOME/.story/geth/aeneid/geth.ipc 2>/dev/null)
               if [ ! -z "$BALANCE" ] && [[ ! "$BALANCE" == *"SyntaxError"* ]]; then
                 echo -e "Balance: $BALANCE IP"
               else
@@ -410,7 +410,7 @@ show_peers() {
   # Check Geth peers
   if [ -S "$HOME/.story/geth/aeneid/geth.ipc" ]; then
     echo -e "${YELLOW}Geth peers:${NC}"
-    PEER_COUNT=$(geth --exec "net.peerCount" attach $HOME/.story/geth/aeneid/geth.ipc 2>/dev/null || echo "Error")
+    PEER_COUNT=$($HOME/go/bin/geth --exec "net.peerCount" attach $HOME/.story/geth/aeneid/geth.ipc 2>/dev/null || echo "Error")
     
     if [[ "$PEER_COUNT" == "Error" ]]; then
       echo -e "${RED}Error fetching Geth peer count. Is Geth running?${NC}"
@@ -419,7 +419,7 @@ show_peers() {
       
       if [ "$PEER_COUNT" -gt 0 ]; then
         echo -e "${YELLOW}Peer details:${NC}"
-        PEERS_DATA=$(geth --exec "admin.peers" attach $HOME/.story/geth/aeneid/geth.ipc 2>/dev/null)
+        PEERS_DATA=$($HOME/go/bin/geth --exec "admin.peers" attach $HOME/.story/geth/aeneid/geth.ipc 2>/dev/null)
         echo "$PEERS_DATA" | jq '.' 2>/dev/null || echo "$PEERS_DATA"
       else
         echo -e "${YELLOW}No peers connected to Geth.${NC}"
@@ -427,7 +427,7 @@ show_peers() {
         
         # Try to add a bootnode
         BOOTNODE="enode://64f0cec7ffb47c868cfcd63a1c30d4944c26cb4fd59b42b9b55c9ba567dea7ecbb80099e9e87e242e5600b36e3a6b39a8c9db28f1f43a7f74e2f9ce76dd6da26@52.18.124.107:30303"
-        geth --exec "admin.addPeer('$BOOTNODE')" attach $HOME/.story/geth/aeneid/geth.ipc 2>/dev/null
+        $HOME/go/bin/geth --exec "admin.addPeer('$BOOTNODE')" attach $HOME/.story/geth/aeneid/geth.ipc 2>/dev/null
         
         echo -e "${YELLOW}Added bootnode for Geth. Check again in a few minutes.${NC}"
       fi
@@ -507,12 +507,12 @@ show_metrics() {
   # Check Geth metrics
   if [ -S "$HOME/.story/geth/aeneid/geth.ipc" ]; then
     echo -e "${YELLOW}Geth metrics:${NC}"
-    echo -e "Block number: $(geth --exec "eth.blockNumber" attach $HOME/.story/geth/aeneid/geth.ipc)"
-    echo -e "Gas price: $(geth --exec "eth.gasPrice" attach $HOME/.story/geth/aeneid/geth.ipc)"
-    echo -e "Peer count: $(geth --exec "net.peerCount" attach $HOME/.story/geth/aeneid/geth.ipc)"
-    echo -e "Network ID: $(geth --exec "net.version" attach $HOME/.story/geth/aeneid/geth.ipc)"
-    echo -e "Mining: $(geth --exec "eth.mining" attach $HOME/.story/geth/aeneid/geth.ipc)"
-    echo -e "Coinbase: $(geth --exec "eth.coinbase" attach $HOME/.story/geth/aeneid/geth.ipc)"
+    echo -e "Block number: $($HOME/go/bin/geth --exec "eth.blockNumber" attach $HOME/.story/geth/aeneid/geth.ipc)"
+    echo -e "Gas price: $($HOME/go/bin/geth --exec "eth.gasPrice" attach $HOME/.story/geth/aeneid/geth.ipc)"
+    echo -e "Peer count: $($HOME/go/bin/geth --exec "net.peerCount" attach $HOME/.story/geth/aeneid/geth.ipc)"
+    echo -e "Network ID: $($HOME/go/bin/geth --exec "net.version" attach $HOME/.story/geth/aeneid/geth.ipc)"
+    echo -e "Mining: $($HOME/go/bin/geth --exec "eth.mining" attach $HOME/.story/geth/aeneid/geth.ipc)"
+    echo -e "Coinbase: $($HOME/go/bin/geth --exec "eth.coinbase" attach $HOME/.story/geth/aeneid/geth.ipc)"
   else
     echo -e "${RED}Error: Geth IPC file not found. Is Geth running?${NC}"
     
