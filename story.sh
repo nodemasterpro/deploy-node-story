@@ -861,16 +861,28 @@ register_validator() {
   # Create validator
   read -p "Do you want to create the validator now? (y/N) " create_validator
   if [[ $create_validator == [yY] || $create_validator == [yY][eE][sS] ]]; then
-    read -p "Enter amount to stake (default: 1500000000000000000000): " stake_amount
-    stake_amount=${stake_amount:-1500000000000000000000}
+    read -p "Enter amount to stake (default: 1024000000000000000000): " stake_amount
+    stake_amount=${stake_amount:-1024000000000000000000}
+    read -p "Enter RPC endpoint (default: https://aeneid.storyrpc.io): " rpc_endpoint
+    rpc_endpoint=${rpc_endpoint:-https://aeneid.storyrpc.io}
     
     echo -e "${YELLOW}Creating validator...${NC}"
-    $HOME/go/bin/story validator create --stake $stake_amount --moniker $MONIKER --chain-id 1315 --private-key $(cat $HOME/.story/story/config/private_key.txt | grep "PRIVATE_KEY" | awk -F'=' '{print $2}')
+    $HOME/go/bin/story validator create \
+      --stake $stake_amount \
+      --moniker $MONIKER \
+      --chain-id 1315 \
+      --rpc "$rpc_endpoint" \
+      --private-key $(cat $HOME/.story/story/config/private_key.txt | grep "PRIVATE_KEY" | awk -F'=' '{print $2}')
     
     echo -e "${GREEN}Validator created successfully!${NC}"
   else
     echo -e "${YELLOW}To create your validator later, use the following command:${NC}"
-    echo -e "$HOME/go/bin/story validator create --stake 1500000000000000000000 --moniker $MONIKER --chain-id 1315 --private-key \$(cat $HOME/.story/story/config/private_key.txt | grep \"PRIVATE_KEY\" | awk -F'=' '{print \$2}')"
+    echo -e "$HOME/go/bin/story validator create \\"
+    echo -e "  --stake 1024000000000000000000 \\"
+    echo -e "  --moniker $MONIKER \\"
+    echo -e "  --rpc \"https://aeneid.storyrpc.io\" \\"
+    echo -e "  --chain-id 1315 \\"
+    echo -e "  --private-key \$(cat $HOME/.story/story/config/private_key.txt | grep \"PRIVATE_KEY\" | awk -F'=' '{print \$2}')"
   fi
   
   # Save validator key
