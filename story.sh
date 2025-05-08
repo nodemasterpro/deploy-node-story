@@ -841,7 +841,7 @@ register_validator() {
   local stake_amount="1024000000000000000000"
   local commission_rate="700"
   local rpc_endpoint="https://aeneid.storyrpc.io"
-  local unlocked="false"
+  local unlocked="true"
   
   echo -e "${YELLOW}Validator will be created with the following parameters:${NC}"
   echo -e "Stake amount: $stake_amount"
