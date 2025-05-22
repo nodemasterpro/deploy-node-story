@@ -31,7 +31,7 @@ GETH_DATA_DIR="$HOME/.story/geth"
 SNAPSHOT_BASE_URL="https://server-3.itrocket.net/testnet/story/"
 
 # Variables for installation
-STORY_GETH_VERSION="v1.0.2"
+STORY_GETH_VERSION="v1.1.0"
 STORY_VERSION="v1.2.0"
 GO_VERSION="1.22.5"
 
