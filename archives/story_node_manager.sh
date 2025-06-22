@@ -177,8 +177,8 @@ update_binaries() {
   echo -e "${BLUE}Mise à jour des binaires...${NC}"
   
   # Variables des versions
-  STORY_GETH_VERSION="v1.0.2"
-  STORY_VERSION="v1.2.0"
+STORY_GETH_VERSION="v1.1.0"
+STORY_VERSION="v1.3.0"
   
   # Arrêt des services
   stop_services

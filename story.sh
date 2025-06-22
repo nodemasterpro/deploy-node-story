@@ -32,7 +32,7 @@ SNAPSHOT_BASE_URL="https://server-3.itrocket.net/testnet/story/"
 
 # Variables for installation
 STORY_GETH_VERSION="v1.1.0"
-STORY_VERSION="v1.2.0"
+STORY_VERSION="v1.3.0"
 GO_VERSION="1.22.5"
 
 # Create necessary directories
@@ -51,7 +51,11 @@ show_help() {
   echo -e "  ${GREEN}start${NC}          - Start the services"
   echo -e "  ${GREEN}stop${NC}           - Stop the services"
   echo -e "  ${GREEN}restart${NC}        - Restart the services"
-  echo -e "  ${GREEN}update${NC}         - Update the binaries"
+  echo -e "  ${GREEN}update${NC}         - Update all binaries (both Geth and Story)"
+  echo -e "  ${GREEN}update geth${NC}    - Update only the Geth binary"
+  echo -e "  ${GREEN}update story${NC}   - Update only the Story binary"
+  echo -e "  ${GREEN}update --source${NC} - Force compilation from source code"
+  echo -e "  ${GREEN}update --binary${NC} - Force use of pre-built binaries"
   echo -e "  ${GREEN}update-peers${NC}   - Update peers from the network"
   echo -e "  ${GREEN}update-snapshots${NC} - Update snapshots to the latest version"
   echo -e "  ${GREEN}remove${NC}         - Remove the Story node"
@@ -558,9 +562,68 @@ show_metrics() {
   fi
 }
 
-# Function to update binaries
-update_binaries() {
-  echo -e "${BLUE}Updating binaries...${NC}"
+# Function to update Geth binary only (optimized with pre-built binaries)
+update_geth_binary() {
+  echo -e "${BLUE}Updating Geth binary to $STORY_GETH_VERSION...${NC}"
+  
+  # Detect architecture
+  ARCH=$(uname -m)
+  case $ARCH in
+    x86_64) BINARY_ARCH="linux_amd64" ;;
+    aarch64|arm64) BINARY_ARCH="linux_arm64" ;;
+    *) 
+      echo -e "${YELLOW}Architecture $ARCH not supported for pre-built binaries, falling back to source compilation...${NC}"
+      update_geth_binary_from_source
+      return
+      ;;
+  esac
+  
+  # Try to download pre-built binary first
+  echo -e "${YELLOW}Attempting to download pre-built Geth binary for $BINARY_ARCH...${NC}"
+  
+  # Download binary (GitHub releases provide pre-built binaries)
+  BINARY_URL="https://github.com/piplabs/story-geth/releases/download/${STORY_GETH_VERSION}/geth_${STORY_GETH_VERSION}_${BINARY_ARCH}.tar.gz"
+  
+  # Create temp directory
+  TEMP_DIR=$(mktemp -d)
+  cd $TEMP_DIR
+  
+  # Download and extract
+  if wget -q "$BINARY_URL" -O "geth_${STORY_GETH_VERSION}_${BINARY_ARCH}.tar.gz" 2>/dev/null; then
+    if tar -xzf "geth_${STORY_GETH_VERSION}_${BINARY_ARCH}.tar.gz" 2>/dev/null; then
+      if [ -f "geth" ]; then
+        echo -e "${GREEN}Successfully downloaded pre-built Geth binary!${NC}"
+        
+        # Stop services
+        stop_services
+        
+        # Install binary
+        mv geth $HOME/go/bin/
+        chmod +x $HOME/go/bin/geth
+        
+        # Restart services
+        start_services
+        
+        # Cleanup
+        cd $HOME
+        rm -rf $TEMP_DIR
+        
+        echo -e "${GREEN}Geth update completed! (using pre-built binary)${NC}"
+        return
+      fi
+    fi
+  fi
+  
+  # If pre-built binary fails, fall back to source compilation
+  echo -e "${YELLOW}Pre-built Geth binary not available, compiling from source...${NC}"
+  cd $HOME
+  rm -rf $TEMP_DIR
+  update_geth_binary_from_source
+}
+
+# Function to update Geth binary from source (fallback)
+update_geth_binary_from_source() {
+  echo -e "${BLUE}Compiling Geth from source...${NC}"
   
   # Stop services
   stop_services
@@ -575,6 +638,78 @@ update_binaries() {
   make geth
   mv build/bin/geth $HOME/go/bin/
   
+  # Restart services
+  start_services
+  
+  echo -e "${GREEN}Geth update completed! (compiled from source)${NC}"
+}
+
+# Function to update Story binary only (optimized with pre-built binaries)
+update_story_binary() {
+  echo -e "${BLUE}Updating Story binary to $STORY_VERSION...${NC}"
+  
+  # Detect architecture
+  ARCH=$(uname -m)
+  case $ARCH in
+    x86_64) BINARY_ARCH="linux_amd64" ;;
+    aarch64|arm64) BINARY_ARCH="linux_arm64" ;;
+    *) 
+      echo -e "${YELLOW}Architecture $ARCH not supported for pre-built binaries, falling back to source compilation...${NC}"
+      update_story_binary_from_source
+      return
+      ;;
+  esac
+  
+  # Try to download pre-built binary first
+  echo -e "${YELLOW}Attempting to download pre-built binary for $BINARY_ARCH...${NC}"
+  
+  # Download binary (GitHub releases provide pre-built binaries)
+  BINARY_URL="https://github.com/piplabs/story/releases/download/${STORY_VERSION}/story_${STORY_VERSION}_${BINARY_ARCH}.tar.gz"
+  
+  # Create temp directory
+  TEMP_DIR=$(mktemp -d)
+  cd $TEMP_DIR
+  
+  # Download and extract
+  if wget -q "$BINARY_URL" -O "story_${STORY_VERSION}_${BINARY_ARCH}.tar.gz" 2>/dev/null; then
+    if tar -xzf "story_${STORY_VERSION}_${BINARY_ARCH}.tar.gz" 2>/dev/null; then
+      if [ -f "story" ]; then
+        echo -e "${GREEN}Successfully downloaded pre-built binary!${NC}"
+        
+        # Stop services
+        stop_services
+        
+        # Install binary
+        mv story $HOME/go/bin/
+        chmod +x $HOME/go/bin/story
+        
+        # Restart services
+        start_services
+        
+        # Cleanup
+        cd $HOME
+        rm -rf $TEMP_DIR
+        
+        echo -e "${GREEN}Story update completed! (using pre-built binary)${NC}"
+        return
+      fi
+    fi
+  fi
+  
+  # If pre-built binary fails, fall back to source compilation
+  echo -e "${YELLOW}Pre-built binary not available, compiling from source...${NC}"
+  cd $HOME
+  rm -rf $TEMP_DIR
+  update_story_binary_from_source
+}
+
+# Function to update Story binary from source (fallback)
+update_story_binary_from_source() {
+  echo -e "${BLUE}Compiling Story from source...${NC}"
+  
+  # Stop services
+  stop_services
+  
   # Update Story
   echo -e "${YELLOW}Updating Story to $STORY_VERSION...${NC}"
   cd $HOME
@@ -588,7 +723,83 @@ update_binaries() {
   # Restart services
   start_services
   
-  echo -e "${GREEN}Update completed!${NC}"
+  echo -e "${GREEN}Story update completed! (compiled from source)${NC}"
+}
+
+# Function to update binaries (both or specific)
+update_binaries() {
+  local target=${1:-"all"}
+  local method=${2:-"auto"}
+  
+  # Check for source/binary force flags
+  if [[ "$target" == "--source" ]] || [[ "$method" == "--source" ]]; then
+    method="source"
+    target="all"
+  elif [[ "$target" == "--binary" ]] || [[ "$method" == "--binary" ]]; then
+    method="binary"
+    target="all"
+  fi
+  
+  case "$target" in
+    geth)
+      if [[ "$method" == "source" ]]; then
+        update_geth_binary_from_source
+      elif [[ "$method" == "binary" ]]; then
+        # Force binary download, fallback to source if fails
+        update_geth_binary
+      else
+        update_geth_binary
+      fi
+      ;;
+    story)
+      if [[ "$method" == "source" ]]; then
+        update_story_binary_from_source
+      elif [[ "$method" == "binary" ]]; then
+        # Force binary download, fallback to source if fails
+        update_story_binary
+      else
+        update_story_binary
+      fi
+      ;;
+    all|*)
+      echo -e "${BLUE}Updating both binaries...${NC}"
+      
+      if [[ "$method" == "source" ]]; then
+        echo -e "${YELLOW}Forced compilation from source...${NC}"
+        # Stop services
+        stop_services
+        
+        # Update Geth from source
+        echo -e "${YELLOW}Compiling Geth from source...${NC}"
+        cd $HOME
+        rm -rf story-geth
+        git clone https://github.com/piplabs/story-geth.git
+        cd story-geth
+        git checkout $STORY_GETH_VERSION
+        make geth
+        mv build/bin/geth $HOME/go/bin/
+        
+        # Update Story from source
+        echo -e "${YELLOW}Compiling Story from source...${NC}"
+        cd $HOME
+        rm -rf story
+        git clone https://github.com/piplabs/story
+        cd story
+        git checkout $STORY_VERSION
+        go build -o story ./client
+        mv story $HOME/go/bin/
+        
+        # Restart services
+        start_services
+        
+        echo -e "${GREEN}Update completed! (compiled from source)${NC}"
+      else
+        # Use optimized binary updates (default)
+        update_geth_binary
+        update_story_binary
+      fi
+      ;;
+  esac
 }
 
 # Function to import snapshots
@@ -1123,7 +1334,7 @@ case "$1" in
     restart_services
     ;;
   update)
-    update_binaries
+    update_binaries "$2"
     ;;
   update-peers)
     update_peers
