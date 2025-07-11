@@ -879,6 +879,15 @@ install_node() {
   
   echo -e "${BLUE}Installing a Story node with moniker: $moniker${NC}"
   
+  # Install system packages
+  echo -e "${YELLOW}Installing system packages...${NC}"
+  sudo apt update && sudo apt install -y chrony ufw htop iotop net-tools
+  
+  # Enable and start chrony service
+  echo -e "${YELLOW}Enabling chrony service...${NC}"
+  sudo systemctl enable chrony
+  sudo systemctl start chrony
+  
   # Install Go if needed
   echo -e "${YELLOW}Checking and installing Go...${NC}"
   cd $HOME
@@ -947,6 +956,19 @@ install_node() {
   echo -e "${YELLOW}Configuring ports in story.toml...${NC}"
   sed -i.bak -e "s%:1317%:${STORY_PORT}317%g;
 s%:8551%:${STORY_PORT}551%g" $HOME/.story/story/config/story.toml
+  
+  # Configure pruning in story.toml
+  echo -e "${YELLOW}Configuring pruning in story.toml...${NC}"
+  sed -i '/^\[base\]/,/^$/{
+    s/^pruning *=.*/pruning = "custom"/
+    /^pruning *=/!b
+    a\pruning-keep-recent = "100"\npruning-interval = "50"
+  }' $HOME/.story/story/config/story.toml
+  
+  # Add snapshot-interval if not present
+  if ! grep -q "snapshot-interval" $HOME/.story/story/config/story.toml; then
+    sed -i '/^\[base\]/a\snapshot-interval = 1000' $HOME/.story/story/config/story.toml
+  fi
   
   # Configure custom ports in config.toml
   echo -e "${YELLOW}Configuring ports in config.toml...${NC}"
