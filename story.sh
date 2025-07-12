@@ -897,8 +897,19 @@ install_node() {
   sudo tar -C /usr/local -xzf "go$VER.linux-amd64.tar.gz" 2>/dev/null
   rm "go$VER.linux-amd64.tar.gz"
   [ ! -f ~/.bash_profile ] && touch ~/.bash_profile
-  echo "export PATH=$PATH:/usr/local/go/bin:~/go/bin" >> ~/.bash_profile
+  [ ! -f ~/.bashrc ] && touch ~/.bashrc
+  
+  # Add to both bash_profile and bashrc for better compatibility
+  echo "export PATH=\$PATH:/usr/local/go/bin:\$HOME/go/bin" >> ~/.bash_profile
+  echo "export PATH=\$PATH:/usr/local/go/bin:\$HOME/go/bin" >> ~/.bashrc
+  
+  # Source both files
   source $HOME/.bash_profile
+  source $HOME/.bashrc
+  
+  # Update current PATH
+  export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+  
   [ ! -d ~/go/bin ] && mkdir -p ~/go/bin
   
   # Set variables
@@ -959,15 +970,34 @@ s%:8551%:${STORY_PORT}551%g" $HOME/.story/story/config/story.toml
   
   # Configure pruning in story.toml
   echo -e "${YELLOW}Configuring pruning in story.toml...${NC}"
-  sed -i '/^\[base\]/,/^$/{
-    s/^pruning *=.*/pruning = "custom"/
-    /^pruning *=/!b
-    a\pruning-keep-recent = "100"\npruning-interval = "50"
-  }' $HOME/.story/story/config/story.toml
   
-  # Add snapshot-interval if not present
-  if ! grep -q "snapshot-interval" $HOME/.story/story/config/story.toml; then
+  # First, check if pruning line exists and update it
+  if grep -q "^pruning" $HOME/.story/story/config/story.toml; then
+    sed -i 's/^pruning *=.*/pruning = "custom"/' $HOME/.story/story/config/story.toml
+  else
+    # If not exists, add it under [base] section
+    sed -i '/^\[base\]/a\pruning = "custom"' $HOME/.story/story/config/story.toml
+  fi
+  
+  # Add pruning-keep-recent if not exists
+  if ! grep -q "^pruning-keep-recent" $HOME/.story/story/config/story.toml; then
+    sed -i '/^pruning *=/a\pruning-keep-recent = "100"' $HOME/.story/story/config/story.toml
+  else
+    sed -i 's/^pruning-keep-recent *=.*/pruning-keep-recent = "100"/' $HOME/.story/story/config/story.toml
+  fi
+  
+  # Add pruning-interval if not exists
+  if ! grep -q "^pruning-interval" $HOME/.story/story/config/story.toml; then
+    sed -i '/^pruning-keep-recent *=/a\pruning-interval = "50"' $HOME/.story/story/config/story.toml
+  else
+    sed -i 's/^pruning-interval *=.*/pruning-interval = "50"/' $HOME/.story/story/config/story.toml
+  fi
+  
+  # Add snapshot-interval if not exists
+  if ! grep -q "^snapshot-interval" $HOME/.story/story/config/story.toml; then
     sed -i '/^\[base\]/a\snapshot-interval = 1000' $HOME/.story/story/config/story.toml
+  else
+    sed -i 's/^snapshot-interval *=.*/snapshot-interval = 1000/' $HOME/.story/story/config/story.toml
   fi
   
   # Configure custom ports in config.toml
@@ -1031,7 +1061,53 @@ EOF
   sleep 5 
   sudo systemctl restart story
   
-  echo -e "${GREEN}Installation completed successfully!${NC}"
+  # Verify installation
+  echo -e "\n${BLUE}Verifying installation...${NC}"
+  
+  # Check if binaries are accessible
+  if command -v story >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ Story binary is in PATH${NC}"
+    story version
+  else
+    echo -e "${YELLOW}⚠ Story binary not in PATH. Use: /root/go/bin/story${NC}"
+    echo -e "${YELLOW}  Run: source ~/.bashrc${NC}"
+  fi
+  
+  if command -v geth >/dev/null 2>&1; then
+    echo -e "${GREEN}✓ Geth binary is in PATH${NC}"
+    geth version | head -3
+  else
+    echo -e "${YELLOW}⚠ Geth binary not in PATH. Use: /root/go/bin/geth${NC}"
+    echo -e "${YELLOW}  Run: source ~/.bashrc${NC}"
+  fi
+  
+  # Verify pruning configuration
+  echo -e "\n${BLUE}Verifying pruning configuration:${NC}"
+  if grep -q 'pruning = "custom"' $HOME/.story/story/config/story.toml; then
+    echo -e "${GREEN}✓ Pruning mode: custom${NC}"
+  else
+    echo -e "${RED}✗ Pruning mode not set to custom${NC}"
+  fi
+  
+  if grep -q 'pruning-keep-recent = "100"' $HOME/.story/story/config/story.toml; then
+    echo -e "${GREEN}✓ Pruning-keep-recent: 100${NC}"
+  else
+    echo -e "${RED}✗ Pruning-keep-recent not set to 100${NC}"
+  fi
+  
+  if grep -q 'pruning-interval = "50"' $HOME/.story/story/config/story.toml; then
+    echo -e "${GREEN}✓ Pruning-interval: 50${NC}"
+  else
+    echo -e "${RED}✗ Pruning-interval not set to 50${NC}"
+  fi
+  
+  if grep -q 'snapshot-interval = 1000' $HOME/.story/story/config/story.toml; then
+    echo -e "${GREEN}✓ Snapshot-interval: 1000${NC}"
+  else
+    echo -e "${RED}✗ Snapshot-interval not set to 1000${NC}"
+  fi
+  
+  echo -e "\n${GREEN}Installation completed successfully!${NC}"
   echo -e "${YELLOW}To check logs:${NC} journalctl -u story -u story-geth -f"
   echo -e "${YELLOW}After synchronization, export your validator key with:${NC} $0 export-key"
 }
